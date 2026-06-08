@@ -7,7 +7,6 @@ import redis
 
 from app.db.session import Base, engine
 from app.models.project import Project
-from app.api.projects import router as projects_router
 from app.api.product_briefs import router as product_briefs_router
 from app.api.visual_tasks import router as visual_tasks_router
 from app.api.brief_routes import router as brief_router
@@ -26,7 +25,6 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Visual Agent API")
 
-app.include_router(projects_router)
 app.include_router(product_briefs_router)
 app.include_router(visual_tasks_router)
 app.include_router(brief_router)

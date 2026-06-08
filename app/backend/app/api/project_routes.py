@@ -50,9 +50,3 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     db.delete(p); db.commit()
     return {'message': f'Project {project_id} deleted'}
 
-@router.get('/{project_id}/generations')
-def list_generations(project_id: int, db: Session = Depends(get_db)):
-    from app.db.crud_visual_asset_v2 import list_by_project
-    records = list_by_project(db=db, project_id=project_id, limit=20)
-    return [{'id': r.id, 'model_used': r.model_used, 'generation_seconds': r.generation_seconds,
-        'created_at': r.created_at.isoformat() if r.created_at else None} for r in records]

@@ -26,6 +26,10 @@ export default function GeneratePage() {
     useEffect(() => {
     const st = (window as any).__reactRouterState || history.state?.usr || {};
     if (st.images) setImages(st.images);
+    if (st.result) {
+      setResult(st.result);
+      if (st.brief) setBrief(st.brief);
+    }
   }, []);
 
   const { data: saved } = useQuery({ queryKey: ['brief', pid], queryFn: () => getProjectBrief(pid) });
