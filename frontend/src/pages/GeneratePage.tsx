@@ -10,6 +10,7 @@ import ImageUploader from '../components/ImageUploader';
 import DocumentUploader from '../components/DocumentUploader';
 import ResultTabs from '../components/ResultTabs';
 import CanvasView from '../components/CanvasView';
+import CopywritingPanel from '../components/CopywritingPanel';
 
 const DF: ProductBrief = { product_name:'', category:'', specifications:[], selling_points:[], target_market:[], usage_scenarios:[], brand_style: "" };
 
@@ -118,6 +119,9 @@ export default function GeneratePage() {
               </div>
             )}
           </div>
+
+          {/* Copywriting Panel */}
+          {result && <CopywritingPanel brief={brief} />}
         </div>
       </main>
 
