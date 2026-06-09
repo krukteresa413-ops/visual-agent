@@ -161,6 +161,30 @@ export default function ProjectsPage() {
           </div>
         )}
 
+        {/* Diamond entries — quick actions */}
+        <div className="w-full grid grid-cols-4 gap-3">
+          <button onClick={() => fileRef.current?.click()}
+            className="liquid-card p-4 flex flex-col items-center gap-2 hover:border-orange-500/30 transition-all group">
+            <span className="text-2xl">📄</span>
+            <span className="text-[11px] text-gray-400 group-hover:text-gray-200">上传文档</span>
+          </button>
+          <button onClick={() => navigate('/brand')}
+            className="liquid-card p-4 flex flex-col items-center gap-2 hover:border-orange-500/30 transition-all group">
+            <span className="text-2xl">🎨</span>
+            <span className="text-[11px] text-gray-400 group-hover:text-gray-200">品牌套件</span>
+          </button>
+          <button onClick={() => navigate('/assets')}
+            className="liquid-card p-4 flex flex-col items-center gap-2 hover:border-orange-500/30 transition-all group">
+            <span className="text-2xl">📦</span>
+            <span className="text-[11px] text-gray-400 group-hover:text-gray-200">素材库</span>
+          </button>
+          <button onClick={() => setShowCreate(true)}
+            className="liquid-card p-4 flex flex-col items-center gap-2 hover:border-orange-500/30 transition-all group">
+            <span className="text-2xl">✨</span>
+            <span className="text-[11px] text-gray-400 group-hover:text-gray-200">新建项目</span>
+          </button>
+        </div>
+
         {/* Projects */}
         <div className="w-full space-y-3">
           <h2 className="text-xs font-medium text-gray-600 text-center">最近项目</h2>
