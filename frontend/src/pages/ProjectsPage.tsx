@@ -17,6 +17,13 @@ const SCENES = [
   { icon: '📦', name: '包装' },
 ];
 
+const DIAMONDS = [
+  { title: '上传文档', desc: 'PDF/PPT/Word', icon: '📄', action: 'upload' },
+  { title: '品牌套件', desc: '品牌管理', icon: '🎨', action: 'brand' },
+  { title: '素材库', desc: '历史生成', icon: '📦', action: 'assets' },
+  { title: '新建项目', desc: '手动创建', icon: '✨', action: 'create' },
+];
+
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -37,6 +44,13 @@ export default function ProjectsPage() {
     onSuccess: (d) => { qc.invalidateQueries({ queryKey: ['projects'] }); setShowCreate(false); navigate('/generate/' + d.id); }
   });
   const delMut = useMutation({ mutationFn: (id: number) => deleteProject(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }) });
+
+  const diamondAction = (action: string) => {
+    if (action === 'upload') fileRef.current?.click();
+    else if (action === 'brand') navigate('/generate/2');
+    else if (action === 'assets') document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' });
+    else setShowCreate(true);
+  };
 
   const callGenerateAPI = async (formData: FormData) => {
     setUploading(true);
@@ -161,32 +175,27 @@ export default function ProjectsPage() {
           </div>
         )}
 
-        {/* Diamond entries — quick actions */}
-        <div className="w-full grid grid-cols-4 gap-3">
-          <button onClick={() => fileRef.current?.click()}
-            className="liquid-card p-4 flex flex-col items-center gap-2 hover:border-orange-500/30 transition-all group">
-            <span className="text-2xl">📄</span>
-            <span className="text-[11px] text-gray-400 group-hover:text-gray-200">上传文档</span>
-          </button>
-          <button onClick={() => navigate('/brand')}
-            className="liquid-card p-4 flex flex-col items-center gap-2 hover:border-orange-500/30 transition-all group">
-            <span className="text-2xl">🎨</span>
-            <span className="text-[11px] text-gray-400 group-hover:text-gray-200">品牌套件</span>
-          </button>
-          <button onClick={() => navigate('/assets')}
-            className="liquid-card p-4 flex flex-col items-center gap-2 hover:border-orange-500/30 transition-all group">
-            <span className="text-2xl">📦</span>
-            <span className="text-[11px] text-gray-400 group-hover:text-gray-200">素材库</span>
-          </button>
-          <button onClick={() => setShowCreate(true)}
-            className="liquid-card p-4 flex flex-col items-center gap-2 hover:border-orange-500/30 transition-all group">
-            <span className="text-2xl">✨</span>
-            <span className="text-[11px] text-gray-400 group-hover:text-gray-200">新建项目</span>
-          </button>
+        {/* Diamond cluster — 菱形导航 */}
+        <div className="liquid-diamond-cluster relative h-[260px] w-[260px] sm:h-[300px] sm:w-[300px] mx-auto">
+          {DIAMONDS.map((d, i) => (
+            <button key={d.title} onClick={() => diamondAction(d.action)}
+              className={`liquid-diamond group absolute flex h-[110px] w-[110px] rotate-45 items-center justify-center rounded-2xl text-gray-100 transition duration-300 hover:z-10 sm:h-[128px] sm:w-[128px] sm:rounded-[22px] ${
+                i === 0 ? 'left-1/2 top-0 -translate-x-1/2' :
+                i === 1 ? 'left-0 top-1/2 -translate-y-1/2' :
+                i === 2 ? 'right-0 top-1/2 -translate-y-1/2' :
+                'left-1/2 bottom-0 -translate-x-1/2'}`}
+              style={{ zIndex: i === 0 ? 2 : 1 }}>
+              <span className="-rotate-45 flex flex-col items-center gap-0.5">
+                <span className="text-xl">{d.icon}</span>
+                <span className="whitespace-nowrap text-xs font-semibold">{d.title}</span>
+                <span className="whitespace-nowrap text-[10px] text-gray-500">{d.desc}</span>
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Projects */}
-        <div className="w-full space-y-3">
+        <div id="projects" className="w-full space-y-3">
           <h2 className="text-xs font-medium text-gray-600 text-center">最近项目</h2>
           {isLoading && <p className="text-gray-600 text-center py-6 text-sm">加载中...</p>}
           {projects?.length === 0 && (
