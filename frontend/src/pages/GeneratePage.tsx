@@ -57,7 +57,7 @@ export default function GeneratePage() {
         <div className="flex items-center gap-3">
           <ThemeToggle isLight={isLight} toggle={toggleTheme} />
           <a href="/" className="text-gray-400 hover:text-gray-200 mr-2 text-sm transition-colors">← 返回</a>
-          <img src="/logo.png" alt="Logo" className="w-8 h-8 rounded-lg object-contain" />
+          <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-lg object-contain" />
           <span className="font-semibold text-lg text-white tracking-tight">视觉 Agent</span>
         </div>
         <div className="flex items-center gap-3">

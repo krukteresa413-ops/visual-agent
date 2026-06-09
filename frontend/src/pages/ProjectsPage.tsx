@@ -168,7 +168,7 @@ export default function ProjectsPage() {
       <header className="sticky top-0 z-10 border-b border-white/5 bg-black/20 backdrop-blur-2xl px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ThemeToggle isLight={isLight} toggle={toggleTheme} />
-          <img src="/logo.png" alt="Logo" className="w-7 h-7 rounded-md object-contain" />
+          <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-lg object-contain" />
           <span className="font-semibold text-sm tracking-tight">视觉 Agent</span>
         </div>
         <button onClick={() => setShowCreate(true)} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 rounded-md text-xs font-medium">+ 新建</button>
