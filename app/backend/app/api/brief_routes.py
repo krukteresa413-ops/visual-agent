@@ -78,7 +78,19 @@ def save_brief(req: BriefSaveRequest, db = None):
     import json
     db2 = SessionLocal()
     try:
-        record = PBModel(project_id=req.project_id, brief_json=json.dumps(req.brief, ensure_ascii=False))
+        b = req.brief
+        record = PBModel(
+            project_id=req.project_id,
+            product_name=b.get("product_name", ""),
+            category=b.get("category", ""),
+            specifications=", ".join(b.get("specifications", []) or []),
+            materials=", ".join(b.get("materials", []) or []),
+            selling_points=", ".join(b.get("selling_points", []) or []),
+            target_market=", ".join(b.get("target_market", []) or []),
+            target_customer=", ".join(b.get("target_customer", []) or []),
+            usage_scenarios=", ".join(b.get("usage_scenarios", []) or []),
+            brand_style=b.get("brand_style") or b.get("_brand_context", ""),
+        )
         db2.add(record); db2.commit(); db2.refresh(record)
         return {'id':record.id,'project_id':req.project_id,'message':'Brief saved'}
     finally: db2.close()
@@ -90,7 +102,18 @@ def get_project_brief(project_id: int):
     import json
     db = SessionLocal()
     try:
-        r = db.query(PBModel).filter(PBModel.project_id == project_id).order_by(PBModel.created_at.desc()).first()
+        r = db.query(PBModel).filter(PBModel.project_id == project_id).order_by(PBModel.id.desc()).first()
         if not r: return {'project_id':project_id,'brief':None}
-        return {'id':r.id,'project_id':project_id,'brief':json.loads(r.brief_json)}
+        brief_dict = {
+            "product_name": r.product_name,
+            "category": r.category,
+            "specifications": [s.strip() for s in (r.specifications or "").split(",") if s.strip()],
+            "materials": [s.strip() for s in (r.materials or "").split(",") if s.strip()],
+            "selling_points": [s.strip() for s in (r.selling_points or "").split(",") if s.strip()],
+            "target_market": [s.strip() for s in (r.target_market or "").split(",") if s.strip()],
+            "target_customer": [s.strip() for s in (r.target_customer or "").split(",") if s.strip()],
+            "usage_scenarios": [s.strip() for s in (r.usage_scenarios or "").split(",") if s.strip()],
+            "brand_style": r.brand_style,
+        }
+        return {'id':r.id,'project_id':project_id,'brief':brief_dict}
     finally: db.close()

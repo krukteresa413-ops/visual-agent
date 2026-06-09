@@ -4,7 +4,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 
-ImageProviderKind = Literal["local", "pollinations", "comfyui", "stability", "dalle", "lovart"]
+ImageProviderKind = Literal["local", "pollinations", "comfyui", "stability", "dalle", "lovart", "mige"]
 
 
 class ImageGenerationRequest(BaseModel):

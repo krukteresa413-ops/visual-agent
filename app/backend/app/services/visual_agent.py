@@ -147,6 +147,29 @@ class VisualAgent:
 
         elapsed = int(time.time() - start_time)
 
+        # Step 2: Layout Agent — 生成排版布局方案
+        layout_plan = None
+        try:
+            from app.services.layout_agent import LayoutAgent
+            layout_agent = LayoutAgent()
+            asset_dict = {
+                main_image: main_image.model_dump() if main_image else None,
+                scene_images: [s.model_dump() for s in (scene_images or [])],
+                selling_points: [s.model_dump() for s in (selling_points or [])],
+                video_scripts: [v.model_dump() for v in (video_scripts or [])],
+                ad_material: ad_material.model_dump() if ad_material else None,
+            }
+            layout_plan = await layout_agent.generate_layout(
+                project_id=project_id,
+                brief=brief,
+                asset_plan=asset_dict,
+                platform_id=platform_id,
+                brand_context=brief.get(_brand_context),
+            )
+            layout_plan = layout_plan.model_dump()
+        except Exception:
+            pass  # Layout is optional, don't block the whole generation
+
         result = VisualAssetPlanOut(
             project_id=project_id,
             main_image=main_image,
@@ -155,6 +178,7 @@ class VisualAgent:
             selling_points=selling_points,
             video_scripts=video_scripts,
             ad_material=ad_material,
+            layout_plan=layout_plan,
         )
 
         # 持久化（如果传入了 db session）
@@ -223,6 +247,29 @@ class VisualAgent:
 
         elapsed = int(time.time() - start_time)
 
+        # Step 2: Layout Agent — 生成排版布局方案
+        layout_plan = None
+        try:
+            from app.services.layout_agent import LayoutAgent
+            layout_agent = LayoutAgent()
+            asset_dict = {
+                main_image: main_image.model_dump() if main_image else None,
+                scene_images: [s.model_dump() for s in (scene_images or [])],
+                selling_points: [s.model_dump() for s in (selling_points or [])],
+                video_scripts: [v.model_dump() for v in (video_scripts or [])],
+                ad_material: ad_material.model_dump() if ad_material else None,
+            }
+            layout_plan = await layout_agent.generate_layout(
+                project_id=project_id,
+                brief=brief,
+                asset_plan=asset_dict,
+                platform_id=platform_id,
+                brand_context=brief.get(_brand_context),
+            )
+            layout_plan = layout_plan.model_dump()
+        except Exception:
+            pass  # Layout is optional, don't block the whole generation
+
         result = VisualAssetPlanOut(
             project_id=project_id,
             main_image=main_image,
@@ -231,6 +278,7 @@ class VisualAgent:
             selling_points=selling_points,
             video_scripts=video_scripts,
             ad_material=ad_material,
+            layout_plan=layout_plan,
         )
 
         if db is not None:

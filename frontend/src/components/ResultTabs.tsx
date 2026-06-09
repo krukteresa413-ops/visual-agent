@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { VisualAssetPlan } from '../api/client';
+import LayoutPanel from './LayoutPanel';
 
 const TABS = [
   { key: 'main_image', label: '主图方案', icon: '🖼️' },
@@ -8,6 +9,7 @@ const TABS = [
   { key: 'selling_points', label: '卖点图', icon: '⭐' },
   { key: 'video_scripts', label: '视频脚本', icon: '🎬' },
   { key: 'ad_material', label: '广告素材', icon: '📢' },
+  { key: 'layout', label: '排版', icon: '📐' },
 ];
 
 type ImageInfo = { url: string; width?: number; height?: number };
@@ -105,6 +107,7 @@ export default function ResultTabs({ plan, images }: { plan: VisualAssetPlan; im
       case 'selling_points': return <SellingPointsPanel data={plan.selling_points} />;
       case 'video_scripts': return <VideoScriptsPanel data={plan.video_scripts} />;
       case 'ad_material': return <AdMaterialPanel data={plan.ad_material} />;
+      case 'layout': return <LayoutPanel layout={plan.layout_plan as any} />;
       default: return null;
     }
   };

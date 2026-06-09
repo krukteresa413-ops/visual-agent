@@ -5,6 +5,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+import asyncio
 import httpx
 from fastapi import HTTPException
 from PIL import Image, ImageDraw, ImageFont
@@ -320,6 +321,102 @@ class LovartImageProvider(ImageGenerationProvider):
         )
 
 
+
+class MigeProvider(ImageGenerationProvider):
+    """MigeAPI (米格API) image generation provider — async polling mode.
+
+    Uses ?async=true to submit, then polls /v1/images/tasks/{task_id}
+    until status becomes SUCCESS.
+    """
+
+    descriptor = ProviderDescriptor(
+        name="mige",
+        display_name="米格API (GPT Image-2)",
+        description="米格API — GPT Image-2 via NewAPI gateway, async polling",
+    )
+
+    def __init__(self, api_key: str | None = None, base_url: str | None = None):
+        self._api_key = api_key or os.getenv("MIGEAPI_API_KEY", "")
+        self._base_url = (base_url or os.getenv("MIGEAPI_BASE_URL", "https://api.migeapi.com")).rstrip("/")
+        self._client = None
+
+    def _get_client(self):
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=self._base_url,
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=300.0,
+            )
+        return self._client
+
+    async def generate(self, request: ImageGenerationRequest) -> ImageGenerationResult:
+        client = self._get_client()
+        model = request.model or "gpt-image-2"
+
+        # Step 1: Submit with ?async=true
+        payload = {
+            "model": model,
+            "prompt": request.prompt,
+            "n": 1,
+            "size": f"{request.width}x{request.height}",
+        }
+        resp = await client.post("/v1/images/generations?async=true", json=payload)
+        if resp.status_code >= 400:
+            raise HTTPException(
+                status_code=502,
+                detail=f"MigeAPI submit error ({resp.status_code}): {resp.text[:200]}",
+            )
+        submit_data = resp.json()
+        task_id = submit_data.get("task_id")
+        if not task_id:
+            raise HTTPException(status_code=502, detail=f"MigeAPI: no task_id in response: {resp.text[:200]}")
+
+        # Step 2: Poll until SUCCESS
+        for _ in range(60):  # max ~3 minutes
+            await asyncio.sleep(3)
+            poll_resp = await client.get(f"/v1/images/tasks/{task_id}")
+            if poll_resp.status_code >= 400:
+                continue
+            poll_data = poll_resp.json()
+            task = poll_data.get("data", {})
+            status = task.get("status", "")
+
+            if status == "SUCCESS":
+                inner = task.get("data", {}).get("data", {})
+                result = inner.get("result", {})
+                images_raw = result.get("images", [])
+
+                images = []
+                for item in images_raw:
+                    urls = item.get("url", [])
+                    url = urls[0] if urls else ""
+                    images.append(GeneratedImage(
+                        url=url,
+                        width=request.width,
+                        height=request.height,
+                        provider_asset_id=inner.get("id"),
+                    ))
+
+                return ImageGenerationResult(
+                    provider="mige",
+                    status="succeeded",
+                    images=images,
+                    raw=inner,
+                )
+
+            elif status == "FAILED":
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"MigeAPI task failed: {task.get('fail_reason', 'unknown')}",
+                )
+
+        raise HTTPException(status_code=504, detail="MigeAPI task timed out after 3 minutes")
+
+
+
 class ImageGenerationService:
     def __init__(self) -> None:
         self._providers: dict[str, ImageGenerationProvider] = {}
@@ -354,3 +451,4 @@ image_generation_service.register(LocalPlaceholderProvider())
 image_generation_service.register(PollinationsProvider())
 image_generation_service.register(OpenAIImageProvider())
 image_generation_service.register(LovartImageProvider())
+image_generation_service.register(MigeProvider())

@@ -111,3 +111,4 @@ class VisualAssetPlanOut(BaseModel):
     selling_points: List[SellingPointModule]
     video_scripts: List[VideoScript]
     ad_material: AdMaterialPlan
+    layout_plan: Optional[dict] = None

@@ -77,16 +77,25 @@ async def generate_from_document(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"AI 解析失败: {str(e)}")
 
-    # Load brand profile memory
+    # Load brand profile memory — project_id first, then brand name fallback
     brand_context = ""
+    bp_id = None
     try:
         from app.db.session import SessionLocal
         from app.models.brand_profile import BrandProfile
         bdb = SessionLocal()
         bp = bdb.query(BrandProfile).filter(BrandProfile.project_id == project_id).first()
+        if not bp:
+            # Cross-project fallback: search by product name
+            brand_name = brief.get("product_name", "") if isinstance(brief, dict) else ""
+            if brand_name:
+                bp = bdb.query(BrandProfile).filter(
+                    BrandProfile.name.ilike(f"%{brand_name}%")
+                ).first()
         if bp:
             brand_context = bp.to_prompt_context()
             brief["_brand_context"] = brand_context
+            bp_id = bp.id
         bdb.close()
     except Exception:
         pass
@@ -143,6 +152,22 @@ async def generate_from_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
 
+    # Auto-save brand profile memory
+    if bp_id:
+        try:
+            bdb2 = SessionLocal()
+            bp2 = bdb2.query(BrandProfile).filter(BrandProfile.id == bp_id).first()
+            if bp2:
+                # Update with latest strategy insights
+                strategy_ctx = brief.get("_strategy_context", "")
+                if strategy_ctx:
+                    bp2.tone_of_voice = bp2.tone_of_voice or brief.get("brand_style", "")
+                    bp2.updated_at = __import__("datetime").datetime.utcnow()
+                    bdb2.commit()
+            bdb2.close()
+        except Exception:
+            pass
+
     # Auto-save to history
     try:
         from app.db.session import SessionLocal
@@ -158,7 +183,7 @@ async def generate_from_document(
     images = None
     if generate_images:
         try:
-            images = await agent.generate_images_from_plan(result, provider="dalle")
+            images = await agent.generate_images_from_plan(result, provider="mige")
         except Exception:
             images = None
 
@@ -166,7 +191,7 @@ async def generate_from_document(
     videos = None
     if generate_videos:
         try:
-            videos = await agent.generate_videos_from_plan(result, provider="dalle")
+            videos = await agent.generate_videos_from_plan(result, provider="mige")
         except Exception:
             videos = None
 

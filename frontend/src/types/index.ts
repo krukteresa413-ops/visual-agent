@@ -25,4 +25,5 @@ export interface VisualAssetPlan {
   selling_points: Record<string, any>[];
   video_scripts: Record<string, any>[];
   ad_material: Record<string, any>;
+  layout_plan?: Record<string, any> | null;
 }
