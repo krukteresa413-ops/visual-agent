@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listProjects, createProject, deleteProject } from '../api/client';
 import { useNavigate } from 'react-router-dom';
 import ReviewQuestions from '../components/ReviewQuestions';
+import AgentProgress from '../components/AgentProgress';
 
 const SCENES = [
   { icon: '🛍️', name: '电商上新' },
@@ -24,6 +25,17 @@ const DIAMONDS = [
   { title: '新建项目', desc: '手动创建', icon: '✨', action: 'create' },
 ];
 
+const PLATFORMS = [
+  { id: 'taobao', name: '淘宝', icon: '🛒' },
+  { id: 'xiaohongshu', name: '小红书', icon: '📕' },
+  { id: 'douyin', name: '抖音', icon: '🎵' },
+  { id: 'pinduoduo', name: '拼多多', icon: '💰' },
+  { id: 'wechat', name: '微信', icon: '💬' },
+  { id: 'meituan', name: '美团', icon: '🍜' },
+  { id: 'amazon', name: 'Amazon', icon: '🌍' },
+  { id: 'alibaba', name: '阿里国际', icon: '🚢' },
+];
+
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -33,6 +45,7 @@ export default function ProjectsPage() {
   const [desc, setDesc] = useState('');
   const [taskText, setTaskText] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
 
   // 追问状态
   const [reviewQuestions, setReviewQuestions] = useState<Array<{field:string;level:string;question:string;hint:string}>>([]);
@@ -53,6 +66,7 @@ export default function ProjectsPage() {
   };
 
   const callGenerateAPI = async (formData: FormData) => {
+    if (selectedPlatform) formData.append('platform_id', selectedPlatform);
     setUploading(true);
     try {
       const resp = await fetch('/api/v1/generate-from-document', { method: 'POST', body: formData });
@@ -172,8 +186,27 @@ export default function ProjectsPage() {
                 </button>
               ))}
             </div>
+
+            {/* Platform selector */}
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              <span className="text-[10px] text-gray-600 mr-1 self-center">平台：</span>
+              {PLATFORMS.map(p => (
+                <button key={p.id}
+                  onClick={() => setSelectedPlatform(selectedPlatform === p.id ? null : p.id)}
+                  className={`px-2.5 py-1 rounded-full border text-[11px] transition-all ${
+                    selectedPlatform === p.id
+                      ? 'border-orange-500/40 bg-orange-500/10 text-orange-300'
+                      : 'border-white/10 bg-white/5 text-gray-500 hover:border-white/20 hover:text-gray-300'
+                  }`}>
+                  {p.icon} {p.name}
+                </button>
+              ))}
+            </div>
           </div>
         )}
+
+        {/* Agent progress — shown during generation */}
+        <AgentProgress active={uploading && reviewQuestions.length === 0} />
 
         {/* Diamond cluster — 菱形导航 */}
         <div className="liquid-diamond-cluster relative h-[260px] w-[260px] sm:h-[300px] sm:w-[300px] mx-auto">
