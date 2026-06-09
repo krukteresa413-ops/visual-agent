@@ -2,6 +2,13 @@
 import pytest, time
 from unittest.mock import AsyncMock
 
+MOCK_STRATEGY = {
+    "visual_positioning":"定位","visual_style":"风格",
+    "selling_points_priority":[{"rank":1,"point":"x","rationale":"测试"}],
+    "asset_plan_summary":{"main_image":"方向","white_bg":"方向","scene_images":"方向","selling_points":"方向","video_scripts":"方向","ad_material":"方向"},
+    "brand_tone":"tone","audience_type":"B2B","key_differentiators":"差异化",
+}
+
 SAMPLE_BRIEF = {
     "product_name":"Test","category":"Test","specifications":["x"],
     "selling_points":["x"],"target_market":["x"],"usage_scenarios":["x"],
@@ -22,7 +29,7 @@ class TestParallelGeneration:
         """并行结果与串行一致"""
         from app.services.visual_agent import VisualAgent
         agent = VisualAgent()
-        agent._llm.call = AsyncMock(side_effect=MOCKS)
+        agent._llm.call = AsyncMock(side_effect=[MOCK_STRATEGY] + MOCKS)
         result = await agent.generate_all_parallel(project_id=1, brief=SAMPLE_BRIEF)
         assert result.main_image is not None
         assert result.white_bg is not None
@@ -43,7 +50,7 @@ class TestParallelGeneration:
         seq_time = time.monotonic() - t1
         # Parallel
         agent2 = VisualAgent()
-        agent2._llm.call = AsyncMock(side_effect=MOCKS.copy())
+        agent2._llm.call = AsyncMock(side_effect=[MOCK_STRATEGY] + MOCKS)
         t2 = time.monotonic()
         await agent2.generate_all_parallel(project_id=1, brief=SAMPLE_BRIEF)
         par_time = time.monotonic() - t2

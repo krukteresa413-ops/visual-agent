@@ -4,6 +4,8 @@
 """
 from typing import List
 
+from app.schemas.visual_strategy import VisualStrategy
+from app.schemas.visual_strategy import VisualStrategy
 from app.schemas.visual_assets import (
     MainImagePlan,
     WhiteBgPlan,
@@ -38,23 +40,24 @@ class VisualAgent:
 
 
     @staticmethod
-    def _enrich_system(system: str, platform_id: str | None) -> str:
-        """Inject platform context + full template into system prompt."""
+    def _enrich_system(system: str, platform_id: str | None, brief: dict | None = None) -> str:
+        """Inject platform context + strategy + full template into system prompt."""
+        parts = [system]
         if platform_id:
-            parts = [system]
             ctx = get_platform_context(platform_id)
             if ctx:
                 parts.append(ctx)
             tmpl = load_platform_prompt(platform_id, {})
             if tmpl:
                 parts.append(tmpl)
-            return "\n".join(parts)
-        return system
+        if brief and brief.get("_strategy_context"):
+            parts.append(brief["_strategy_context"])
+        return "\n".join(parts) if len(parts) > 1 else system
 
     async def generate_main_image(self, brief: dict, platform_id: str | None = None) -> MainImagePlan:
         try:
             """PRD 8.3：主图生成方案"""
-            system = self._enrich_system(self._prompts.render("system", {}), platform_id)
+            system = self._enrich_system(self._prompts.render("system", {}), platform_id, brief)
             user = self._prompts.render("main_image", brief)
             raw = await self._llm.call(system_prompt=system, user_prompt=user)
             return MainImagePlan(**raw)
@@ -64,7 +67,7 @@ class VisualAgent:
     async def generate_white_bg(self, brief: dict, platform_id: str | None = None) -> WhiteBgPlan:
         try:
             """PRD 8.4：白底图方案"""
-            system = self._enrich_system(self._prompts.render("system", {}), platform_id)
+            system = self._enrich_system(self._prompts.render("system", {}), platform_id, brief)
             user = self._prompts.render("white_bg", brief)
             raw = await self._llm.call(system_prompt=system, user_prompt=user)
             return WhiteBgPlan(**raw)
@@ -74,7 +77,7 @@ class VisualAgent:
     async def generate_scene_images(self, brief: dict, platform_id: str | None = None) -> List[SceneImagePlan]:
         try:
             """PRD 8.5：场景图方案（1-3个）"""
-            system = self._enrich_system(self._prompts.render("system", {}), platform_id)
+            system = self._enrich_system(self._prompts.render("system", {}), platform_id, brief)
             user = self._prompts.render("scene_image", brief)
             raw = await self._llm.call(system_prompt=system, user_prompt=user)
             if isinstance(raw, list):
@@ -86,7 +89,7 @@ class VisualAgent:
     async def generate_selling_points(self, brief: dict, platform_id: str | None = None) -> List[SellingPointModule]:
         try:
             """PRD 8.6：卖点图模块（3-5个）"""
-            system = self._enrich_system(self._prompts.render("system", {}), platform_id)
+            system = self._enrich_system(self._prompts.render("system", {}), platform_id, brief)
             user = self._prompts.render("selling_point", brief)
             raw = await self._llm.call(system_prompt=system, user_prompt=user)
             if isinstance(raw, list):
@@ -98,7 +101,7 @@ class VisualAgent:
     async def generate_video_scripts(self, brief: dict, platform_id: str | None = None) -> List[VideoScript]:
         try:
             """PRD 8.7：短视频脚本（15秒+30秒）"""
-            system = self._enrich_system(self._prompts.render("system", {}), platform_id)
+            system = self._enrich_system(self._prompts.render("system", {}), platform_id, brief)
             user = self._prompts.render("video_script", brief)
             raw = await self._llm.call(system_prompt=system, user_prompt=user)
             if isinstance(raw, list):
@@ -110,7 +113,7 @@ class VisualAgent:
     async def generate_ad_material(self, brief: dict, platform_id: str | None = None) -> AdMaterialPlan:
         try:
             """PRD 8.8：广告视频素材方案"""
-            system = self._enrich_system(self._prompts.render("system", {}), platform_id)
+            system = self._enrich_system(self._prompts.render("system", {}), platform_id, brief)
             user = self._prompts.render("ad_material", brief)
             raw = await self._llm.call(system_prompt=system, user_prompt=user)
             return AdMaterialPlan(**raw)
@@ -173,18 +176,27 @@ class VisualAgent:
         db=None,
         brief_id: int = None,
     ) -> VisualAssetPlanOut:
-        """PRD 5.1 并行优化版：asyncio.gather + 可选持久化"""
+        """PRD 5.1 创意策略驱动版：策略 → 注入 → 并行生成六类素材"""
         import asyncio
         import time
         start_time = time.time()
 
+        # Step 0: 先出方向（创意策略）
+        try:
+            strategy = await self.generate_visual_strategy(brief)
+            strategy_context = strategy.to_context_string()
+            enriched_brief = {**brief, "_strategy_context": strategy_context}
+        except Exception:
+            enriched_brief = brief
+
+        # Step 1: 策略注入后并行生成六类素材
         results = await asyncio.gather(
-            self.generate_main_image(brief, platform_id),
-            self.generate_white_bg(brief, platform_id),
-            self.generate_scene_images(brief, platform_id),
-            self.generate_selling_points(brief, platform_id),
-            self.generate_video_scripts(brief, platform_id),
-            self.generate_ad_material(brief, platform_id),
+            self.generate_main_image(enriched_brief, platform_id),
+            self.generate_white_bg(enriched_brief, platform_id),
+            self.generate_scene_images(enriched_brief, platform_id),
+            self.generate_selling_points(enriched_brief, platform_id),
+            self.generate_video_scripts(enriched_brief, platform_id),
+            self.generate_ad_material(enriched_brief, platform_id),
             return_exceptions=True,
         )
 
@@ -360,10 +372,39 @@ JSON 输出 6-10 模块"""
         raw["modules"] = modules
         return DetailPagePlan(**raw)
 
-    VISUAL_STRATEGY_SYSTEM_PROMPT = """首席视觉策略师 1.品牌定位 2.目标客户画像 3.视觉风格 4.卖点优先级 5.素材规划 区分 B2B/B2C JSON:{visual_positioning,target_customer_analysis,visual_style,selling_points_priority,asset_plan_summary,brand_tone,audience_type,key_differentiators}"""
+    VISUAL_STRATEGY_SYSTEM_PROMPT = """你是一位资深视觉策略师（Creative Strategist）。在生成任何视觉素材之前，你负责确定整体的创意方向和策略框架。
 
-    async def generate_visual_strategy(self, brief: dict) -> dict:
-        import json
-        up = f"{brief.get('product_name','')} {brief.get('category','')} | {', '.join(brief.get('specifications',[]))} | {', '.join(brief.get('selling_points',[]))} | {', '.join(brief.get('target_market',[]))} | {', '.join(brief.get('target_customer',[]))} | {', '.join(brief.get('usage_scenarios',[]))} | {brief.get('brand_style','')}"
-        raw = await self._llm.call(system_prompt=self.VISUAL_STRATEGY_SYSTEM_PROMPT, user_prompt=up)
-        return raw
+## 你的任务
+根据产品信息，制定完整的视觉策略。这个策略将指导后续所有素材（主图、白底图、场景图、卖点模块、视频脚本、广告素材）的生成。
+
+## 分析维度
+1. 品牌定位: 这个产品在市场中的定位是什么？一句话概括
+2. 目标客户画像: 谁在买这个产品？他们的关注点是什么？
+3. 视觉风格: 色彩、构图、光影的整体方向（如：工业专业风/生活美学风/科技极简风）
+4. 卖点优先级: 对卖点进行排序（Rank 1-3），并解释排序理由
+5. 素材策略: 针对6类素材分别给出方向建议
+6. 品牌语调: B2B 专业可信 / B2C 情感共鸣
+7. 受众类型: B2B 或 B2C
+8. 核心差异化: 与竞品相比最独特的优势
+
+## 输出格式
+严格输出以下 JSON，不要任何额外文字：
+{"visual_positioning":"品牌定位","target_customer_analysis":"目标客户分析","visual_style":"视觉风格方向","selling_points_priority":[{"rank":1,"point":"卖点","rationale":"理由"}],"asset_plan_summary":{"main_image":"方向","white_bg":"方向","scene_images":"方向","selling_points":"方向","video_scripts":"方向","ad_material":"方向"},"brand_tone":"语调","audience_type":"B2B或B2C","key_differentiators":"差异化"}"""
+
+    async def generate_visual_strategy(self, brief: dict) -> VisualStrategy:
+        """生成创意策略 — 先出方向再出图"""
+        product_info = (
+            f"产品: {brief.get('product_name','')} | "
+            f"品类: {brief.get('category','')} | "
+            f"规格: {', '.join(brief.get('specifications',[]))} | "
+            f"卖点: {', '.join(brief.get('selling_points',[]))} | "
+            f"目标市场: {', '.join(brief.get('target_market',[]))} | "
+            f"目标客户: {', '.join(brief.get('target_customer',[]))} | "
+            f"使用场景: {', '.join(brief.get('usage_scenarios',[]))} | "
+            f"品牌风格: {brief.get('brand_style','')}"
+        )
+        raw = await self._llm.call(
+            system_prompt=self.VISUAL_STRATEGY_SYSTEM_PROMPT,
+            user_prompt=product_info,
+        )
+        return VisualStrategy(**raw)
