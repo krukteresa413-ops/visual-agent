@@ -30,6 +30,7 @@ async def generate_from_document(
     project_id: int = Form(2),
     platform_id: str | None = Form(None),
     skip_review: bool = Form(False),
+    strategy_first: bool = Form(False),
     answers: str | None = Form(None),
     generate_images: bool = Form(False),
     generate_videos: bool = Form(False),
@@ -121,6 +122,15 @@ async def generate_from_document(
             }
         if questions:
             brief["_review_questions"] = questions
+
+    if strategy_first:
+        # 策略优先模式：只返回解析结果，不生成
+        return {
+            "needs_review": False,
+            "parsed_brief": brief,
+            "generation": None,
+            "elapsed_seconds": 0,
+        }
 
     if not brief.get("product_name"):
         raise HTTPException(status_code=422, detail="未能识别产品名称，请提供更详细的产品资料或回答追问")

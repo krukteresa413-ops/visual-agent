@@ -103,7 +103,7 @@ export default function ProjectsPage() {
   };
 
   const callGenerateAPI = async (formData: FormData) => {
-    if (selectedPlatform) formData.append('platform_id', selectedPlatform);
+    if (selectedPlatform && !formData.has('platform_id')) formData.append('platform_id', selectedPlatform);
     setUploading(true);
     try {
       const resp = await fetch('/api/v1/generate-from-document', { method: 'POST', body: formData });
@@ -116,7 +116,8 @@ export default function ProjectsPage() {
         // 完整生成完成 → 跳转结果页
         navigate('/generate/2', { state: { brief: data.parsed_brief, result: data.generation } });
       } else if (data.parsed_brief) {
-        // 追问已解决但还未生成 → 拉取策略预览
+        // 追问已解决或无需追问 → 拉取策略预览
+        setReviewBrief(data.parsed_brief);
         fetchStrategyPreview(data.parsed_brief);
       } else {
         alert(data.detail || '生成失败');
@@ -126,13 +127,13 @@ export default function ProjectsPage() {
   };
 
   const handleUpload = async (file: File) => {
-    const fd = new FormData(); fd.append('file', file); fd.append('project_id', '2');
+    const fd = new FormData(); fd.append('file', file); fd.append('project_id', '2'); fd.append('strategy_first', 'true');
     await callGenerateAPI(fd);
   };
 
   const handleText = async () => {
     if (!taskText.trim()) return;
-    const fd = new FormData(); fd.append('text', taskText); fd.append('project_id', '2');
+    const fd = new FormData(); fd.append('text', taskText); fd.append('project_id', '2'); fd.append('strategy_first', 'true');
     await callGenerateAPI(fd);
   };
 
@@ -142,6 +143,7 @@ export default function ProjectsPage() {
     fd.append('parsed_brief_json', JSON.stringify(reviewBrief));
     fd.append('answers', JSON.stringify(answers));
     fd.append('project_id', '2');
+    fd.append('strategy_first', 'true');
     await callGenerateAPI(fd);
   };
 
@@ -151,6 +153,7 @@ export default function ProjectsPage() {
     fd.append('parsed_brief_json', JSON.stringify(reviewBrief));
     fd.append('skip_review', 'true');
     fd.append('project_id', '2');
+    fd.append('strategy_first', 'true');
     await callGenerateAPI(fd);
   };
 
