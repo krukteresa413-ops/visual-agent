@@ -76,6 +76,20 @@ async def generate_from_document(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"AI 解析失败: {str(e)}")
 
+    # Load brand profile memory
+    brand_context = ""
+    try:
+        from app.db.session import SessionLocal
+        from app.models.brand_profile import BrandProfile
+        bdb = SessionLocal()
+        bp = bdb.query(BrandProfile).filter(BrandProfile.project_id == project_id).first()
+        if bp:
+            brand_context = bp.to_prompt_context()
+            brief["_brand_context"] = brand_context
+        bdb.close()
+    except Exception:
+        pass
+
     # Compliance check
     compliance_warnings = ComplianceChecker.check_brief(brief)
 

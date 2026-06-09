@@ -52,6 +52,8 @@ class VisualAgent:
                 parts.append(tmpl)
         if brief and brief.get("_strategy_context"):
             parts.append(brief["_strategy_context"])
+        if brief and brief.get("_brand_context"):
+            parts.append("# 品牌记忆\n" + brief["_brand_context"])
         return "\n".join(parts) if len(parts) > 1 else system
 
     async def generate_main_image(self, brief: dict, platform_id: str | None = None) -> MainImagePlan:
