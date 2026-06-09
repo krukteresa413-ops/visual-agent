@@ -158,7 +158,7 @@ async def generate_from_document(
     images = None
     if generate_images:
         try:
-            images = await agent.generate_images_from_plan(result, provider="local")
+            images = await agent.generate_images_from_plan(result, provider="dalle")
         except Exception:
             images = None
 
@@ -166,7 +166,7 @@ async def generate_from_document(
     videos = None
     if generate_videos:
         try:
-            videos = await agent.generate_videos_from_plan(result, provider="local")
+            videos = await agent.generate_videos_from_plan(result, provider="dalle")
         except Exception:
             videos = None
 
