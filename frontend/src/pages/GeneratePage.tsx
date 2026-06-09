@@ -107,6 +107,7 @@ export default function GeneratePage() {
                 sellingPoints={result.selling_points}
                 videoScripts={result.video_scripts}
                 adMaterial={result.ad_material}
+                brief={brief}
               />
             ) : <ResultTabs plan={result} images={images} />
           ) : (

@@ -7,6 +7,7 @@ interface CanvasViewProps {
   sellingPoints: any[];
   videoScripts: any[];
   adMaterial: any;
+  brief?: any;
 }
 
 interface CanvasState {
@@ -15,12 +16,38 @@ interface CanvasState {
   scale: number;
 }
 
-export default function CanvasView({ mainImage, whiteBg, sceneImages, sellingPoints, videoScripts, adMaterial }: CanvasViewProps) {
+export default function CanvasView({ mainImage, whiteBg, sceneImages, sellingPoints, videoScripts, adMaterial, brief }: CanvasViewProps) {
   const [canvas, setCanvas] = useState<CanvasState>({ x: 0, y: 0, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [selectedAsset, setSelectedAsset] = useState<any>(null);
+  const [modifying, setModifying] = useState(false);
   const [chatInput, setChatInput] = useState('');
+
+  const handleModify = async () => {
+    if (!chatInput.trim() || !selectedAsset || !brief) return;
+    setModifying(true);
+    try {
+      const resp = await fetch('/api/v1/asset/modify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_type: selectedAsset._type,
+          original: selectedAsset,
+          instruction: chatInput,
+          brief: brief,
+        }),
+      });
+      const data = await resp.json();
+      if (data.modified && !data.error) {
+        setSelectedAsset({ ...data.modified, _type: selectedAsset._type });
+        setChatInput('');
+      }
+    } catch (e) {
+      // silent fail, keep original
+    }
+    finally { setModifying(false); }
+  };
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Pan: mouse drag
@@ -161,9 +188,11 @@ export default function CanvasView({ mainImage, whiteBg, sceneImages, sellingPoi
                   onChange={e => setChatInput(e.target.value)}
                   placeholder="例如：背景换成城市夜景..."
                   className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-gray-200 placeholder-gray-600"
-                  onKeyDown={e => { if (e.key === 'Enter') { alert('修改请求已提交（Demo）'); setChatInput(''); } }} />
-                <button onClick={() => { alert('修改请求已提交（Demo）'); setChatInput(''); }}
-                  className="px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 rounded-lg text-xs">修改</button>
+                  onKeyDown={e => { if (e.key === 'Enter') handleModify(); }} />
+                <button onClick={handleModify}
+                  disabled={modifying || !chatInput.trim()}
+                  className="px-3 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 disabled:opacity-30 text-orange-300 rounded-lg text-xs">
+                  {modifying ? '修改中...' : '修改'}</button>
               </div>
             </div>
           </div>

@@ -18,6 +18,7 @@ from app.api.image_generation_routes import router as image_gen_router
 from app.api.platform_routes import router as platform_router
 from app.api.video_generation_routes import router as video_gen_router
 from app.api.unified_generation_routes import router as unified_router
+from app.api.asset_routes import router as asset_router
 
 load_dotenv("/opt/visual-agent/.env")
 
@@ -35,7 +36,9 @@ app.include_router(inspiration_router)
 app.include_router(image_gen_router)
 app.include_router(video_gen_router)
 app.include_router(platform_router)
+app.include_router(asset_router)
 app.include_router(unified_router)
+app.include_router(asset_router)
 
 
 @app.get("/health")
