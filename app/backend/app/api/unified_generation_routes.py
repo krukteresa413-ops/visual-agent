@@ -158,7 +158,7 @@ async def generate_from_document(
     images = None
     if generate_images:
         try:
-            images = await agent.generate_images_from_plan(result, provider="dalle")
+            images = await agent.generate_images_from_plan(result, provider="local")
         except Exception:
             images = None
 
