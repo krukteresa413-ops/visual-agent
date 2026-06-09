@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import ReviewQuestions from '../components/ReviewQuestions';
 import AgentProgress from '../components/AgentProgress';
 import StrategyPanel from '../components/StrategyPanel';
+import ThemeToggle, { useTheme } from '../components/ThemeToggle';
 
 const SCENES = [
   { icon: '🛍️', name: '电商上新' },
@@ -40,6 +41,7 @@ const PLATFORMS = [
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { isLight, toggle: toggleTheme } = useTheme();
   const fileRef = useRef<HTMLInputElement>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
@@ -169,6 +171,7 @@ export default function ProjectsPage() {
             <span className="text-white">VA</span></div>
           <span className="font-semibold text-sm tracking-tight">视觉 Agent</span>
         </div>
+        <ThemeToggle isLight={isLight} toggle={toggleTheme} />
         <button onClick={() => setShowCreate(true)} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 rounded-md text-xs font-medium">+ 新建</button>
       </header>
 

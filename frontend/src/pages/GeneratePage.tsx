@@ -11,6 +11,7 @@ import DocumentUploader from '../components/DocumentUploader';
 import ResultTabs from '../components/ResultTabs';
 import CanvasView from '../components/CanvasView';
 import CopywritingPanel from '../components/CopywritingPanel';
+import ThemeToggle, { useTheme } from '../components/ThemeToggle';
 
 const DF: ProductBrief = { product_name:'', category:'', specifications:[], selling_points:[], target_market:[], usage_scenarios:[], brand_style: "" };
 
@@ -24,6 +25,7 @@ export default function GeneratePage() {
   const [mode, setMode] = useState<'manual'|'parse'|'doc'>('manual');
   const [missing, setMissing] = useState<any[]>([]);
   const [startTime, setStartTime] = useState(0);
+  const { isLight, toggle: toggleTheme } = useTheme();
   const [viewMode, setViewMode] = useState<'tabs' | 'canvas'>('canvas');
   const [uploadedImages, setUploadedImages] = useState<Array<{filename:string;url:string}>>([]);
 
@@ -53,6 +55,7 @@ export default function GeneratePage() {
       {/* Glass header */}
       <header className="sticky top-0 z-50 border-b border-white/5 bg-black/20 backdrop-blur-2xl px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <ThemeToggle isLight={isLight} toggle={toggleTheme} />
           <a href="/" className="text-gray-400 hover:text-gray-200 mr-2 text-sm transition-colors">← 返回</a>
           <div className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm" style={{background:'linear-gradient(135deg,#f97316,#ec4899)'}}>
             <span className="text-white">VA</span>

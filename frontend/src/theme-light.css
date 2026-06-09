@@ -1,0 +1,92 @@
+/* ===== Light Theme Overrides ===== */
+/* Apply .light to <html> via ThemeToggle */
+
+.light .liquid-page {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(249,115,22,0.06), transparent 45%),
+    radial-gradient(circle at 20% 60%, rgba(59,130,246,0.04), transparent 40%),
+    radial-gradient(circle at 80% 30%, rgba(236,72,153,0.03), transparent 35%),
+    linear-gradient(180deg, #f8f9fa 0%, #f1f3f5 50%, #e9ecef 100%);
+}
+
+.light .liquid-orb {
+  background:
+    linear-gradient(135deg, rgba(0,0,0,0.03), rgba(0,0,0,0.01)),
+    radial-gradient(circle at 28% 22%, rgba(249,115,22,0.08), transparent 40%);
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: inset 0 1px 0 rgba(0,0,0,0.04), 0 20px 60px rgba(249,115,22,0.04);
+}
+
+.light .liquid-pill {
+  border: 1px solid rgba(0,0,0,0.1);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.6)),
+    radial-gradient(circle at 22% 18%, rgba(255,255,255,0.9), transparent 42%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px rgba(0,0,0,0.06);
+}
+
+.light .liquid-card {
+  border: 1px solid rgba(0,0,0,0.08);
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.5)),
+    radial-gradient(circle at 18% 0%, rgba(255,255,255,0.6), transparent 38%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 12px 40px rgba(0,0,0,0.06);
+}
+.light .liquid-card::before {
+  background: linear-gradient(115deg, rgba(0,0,0,0.03), transparent 30%, rgba(0,0,0,0.02) 72%, transparent);
+}
+
+.light .liquid-input {
+  border: 1px solid rgba(0,0,0,0.1) !important;
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.8), rgba(255,255,255,0.5)),
+    radial-gradient(circle at 12% 0%, rgba(255,255,255,0.7), transparent 38%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 24px rgba(0,0,0,0.04) !important;
+}
+
+/* Diamond overrides */
+.light .liquid-diamond {
+  border: 1px solid rgba(0,0,0,0.08);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.8), rgba(255,255,255,0.5)),
+    radial-gradient(circle at 24% 18%, rgba(249,115,22,0.07), transparent 42%),
+    radial-gradient(circle at 72% 82%, rgba(59,130,246,0.03), transparent 46%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 20px 44px rgba(0,0,0,0.06);
+}
+.light .liquid-diamond::before {
+  border: 1px solid rgba(0,0,0,0.04);
+  background: linear-gradient(135deg, rgba(0,0,0,0.03), transparent 48%);
+}
+.light .liquid-diamond:hover {
+  border-color: rgba(249,115,22,0.3);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 28px 52px rgba(249,115,22,0.08);
+}
+
+/* Text colors */
+.light .text-gray-100 { color: #1a1a2e !important; }
+.light .text-gray-200 { color: #2d2d44 !important; }
+.light .text-gray-300 { color: #3d3d5c !important; }
+.light .text-gray-400 { color: #555577 !important; }
+.light .text-gray-500 { color: #777799 !important; }
+.light .text-gray-600 { color: #9999aa !important; }
+.light .text-gray-700 { color: #bbbbcc !important; }
+.light .text-white { color: #1a1a2e !important; }
+
+/* Placeholder */
+.light .placeholder-gray-600::placeholder { color: #9999aa !important; }
+
+/* Border & bg overrides for common tailwind patterns */
+.light .bg-white\/5 { background: rgba(0,0,0,0.03) !important; }
+.light .bg-white\/10 { background: rgba(0,0,0,0.05) !important; }
+.light .bg-black\/20 { background: rgba(255,255,255,0.7) !important; }
+.light .bg-black\/30 { background: rgba(255,255,255,0.8) !important; }
+.light .bg-black\/60 { background: rgba(0,0,0,0.3) !important; }
+.light .border-white\/5 { border-color: rgba(0,0,0,0.05) !important; }
+.light .border-white\/10 { border-color: rgba(0,0,0,0.08) !important; }
+.light .border-white\/20 { border-color: rgba(0,0,0,0.12) !important; }
+.light .hover\:border-white\/20:hover { border-color: rgba(0,0,0,0.15) !important; }
+
+/* Header / sticky elements */
+.light .backdrop-blur-2xl {
+  --tw-backdrop-blur: blur(40px);
+}
