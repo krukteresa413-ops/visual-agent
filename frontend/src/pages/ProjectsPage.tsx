@@ -164,28 +164,26 @@ export default function ProjectsPage() {
       <input ref={fileRef} type="file" className="hidden" accept=".pdf,.pptx,.docx,.xlsx,.txt,.csv,.png,.jpg,.webp"
         onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
 
-      {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-white/5 bg-black/20 backdrop-blur-2xl px-6 py-3 flex items-center justify-between">
+      {/* Header — Apple-style: minimal, transparent */}
+      <header className="sticky top-0 z-10 backdrop-blur-xl px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ThemeToggle isLight={isLight} toggle={toggleTheme} />
-          <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-lg object-contain" />
-          <span className="font-semibold text-sm tracking-tight">视觉 Agent</span>
+          <img src="/logo.png" alt="Logo" className="w-8 h-8 rounded-lg object-contain" />
+          <span className="font-semibold text-sm tracking-tight text-white/80">视觉 Agent</span>
         </div>
-        <button onClick={() => setShowCreate(true)} className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 rounded-md text-xs font-medium">+ 新建</button>
+        <button onClick={() => setShowCreate(true)} className="text-sm text-gray-400 hover:text-white transition-colors">新建项目 →</button>
       </header>
 
       {/* Single column content */}
-      <main className="max-w-2xl mx-auto px-6 py-16 flex flex-col items-center gap-10">
+      <main className="max-w-4xl mx-auto px-6 pt-28 pb-32 flex flex-col items-center gap-20">
 
         {/* Hero */}
-        <div className="text-center space-y-3">
-          <div className="liquid-pill inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-300">
-            <span className="text-orange-400">✦</span> 外贸产品视觉内容生成 Agent
-          </div>
-          <h1 className="text-2xl md:text-3xl font-semibold text-white leading-snug">
-            上传产品资料，自动生成<br /><span className="gradient-text">全套视觉素材</span>
+        <div className="text-center space-y-6">
+          <p className="text-[11px] tracking-[0.2em] uppercase text-gray-500">AI-Powered Visual Content</p>
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-white leading-[1.1] tracking-tight">
+            上传产品资料<br />自动生成<span className="text-gray-400">全套视觉素材</span>
           </h1>
-          <p className="text-gray-500 text-sm">拖拽 PDF / PPT / Word 或直接输入产品描述，AI 自动提取卖点生成六类素材</p>
+          <p className="text-base text-gray-500 max-w-lg mx-auto leading-relaxed">拖拽 PDF / PPT / Word 或直接输入产品描述，AI 自动提取卖点并生成六类视觉素材</p>
         </div>
 
         {/* Review Questions — shown when API returns needs_review */}
@@ -199,49 +197,50 @@ export default function ProjectsPage() {
           />
         )}
 
-        {/* Input area — hidden during review */}
-        {reviewQuestions.length === 0 && !strategyData && (
-          <div className="w-full space-y-4">
-            <div className="liquid-card p-3">
-              <div className="flex gap-2">
+        {/* Input + tags — grouped together */}
+        <div className="w-full flex flex-col items-center gap-6">
+          {reviewQuestions.length === 0 && !strategyData && (
+            <div className="w-full max-w-2xl mx-auto">
+              <div className="border border-white/10 rounded-2xl bg-white/[0.02] p-5 hover:border-white/20 transition-colors">
                 <textarea
-                  className="flex-1 bg-transparent border-0 text-sm text-gray-100 placeholder-gray-600 resize-none focus:outline-none min-h-[80px] py-2"
+                  className="w-full bg-transparent border-0 text-base text-gray-100 placeholder-gray-500 resize-none focus:outline-none min-h-[140px] leading-relaxed"
                   placeholder="输入产品描述，例如：300L商用冷柜，不锈钢外壳，快速制冷，节能R290制冷剂，目标市场欧美中东..."
                   value={taskText}
                   onChange={e => setTaskText(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleText(); } }} />
-              </div>
-              <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
-                <button onClick={() => fileRef.current?.click()}
-                  className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
-                  📎 上传文档（PDF·PPT·Word·Excel·图片）
-                </button>
-                <button onClick={handleText} disabled={!taskText.trim() || uploading}
-                  className="px-5 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-30 rounded-lg text-sm font-medium transition-all">
-                  {uploading ? '生成中...' : '生成'}
-                </button>
+                <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/5">
+                  <button onClick={() => fileRef.current?.click()}
+                    className="text-sm text-gray-500 hover:text-white transition-colors">
+                    上传文档 →
+                  </button>
+                  <button onClick={handleText} disabled={!taskText.trim() || uploading}
+                    className="text-sm font-medium text-white hover:text-gray-300 disabled:text-gray-700 transition-colors">
+                    {uploading ? '生成中...' : '生成 →'}
+                  </button>
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Scene tags */}
-            <div className="flex flex-wrap gap-1.5 justify-center">
+          {/* Scene tags + platform */}
+          <div className="flex flex-col items-center gap-5">
+            <div className="flex flex-wrap gap-1.5 justify-center max-w-md">
               {SCENES.map(s => (
                 <button key={s.name} onClick={() => setTaskText((prev) => prev + ' ' + s.name + '物料')}
-                  className="px-2.5 py-1 rounded-full border border-white/10 bg-white/5 text-[11px] text-gray-500 hover:border-orange-500/30 hover:text-gray-300 transition-all">
+                  className="px-2.5 py-1 rounded-full border border-white/10 bg-white/5 text-[11px] text-gray-500 hover:border-white/20 hover:text-gray-300 transition-colors">
                   {s.icon} {s.name}
                 </button>
               ))}
             </div>
 
-            {/* Platform selector */}
             <div className="flex flex-wrap gap-1.5 justify-center">
-              <span className="text-[10px] text-gray-600 mr-1 self-center">平台：</span>
+              <span className="text-[11px] text-gray-600 mr-1 self-center">平台：</span>
               {PLATFORMS.map(p => (
                 <button key={p.id}
                   onClick={() => setSelectedPlatform(selectedPlatform === p.id ? null : p.id)}
-                  className={`px-2.5 py-1 rounded-full border text-[11px] transition-all ${
+                  className={`px-2.5 py-1 rounded-full border text-[11px] transition-colors ${
                     selectedPlatform === p.id
-                      ? 'border-orange-500/40 bg-orange-500/10 text-orange-300'
+                      ? 'border-white/30 bg-white/10 text-gray-200'
                       : 'border-white/10 bg-white/5 text-gray-500 hover:border-white/20 hover:text-gray-300'
                   }`}>
                   {p.icon} {p.name}
@@ -249,7 +248,7 @@ export default function ProjectsPage() {
               ))}
             </div>
           </div>
-        )}
+        </div>
 
         {/* Strategy confirmation — shown after review resolved */}
         {strategyData && reviewBrief && (
@@ -265,10 +264,10 @@ export default function ProjectsPage() {
         <AgentProgress active={uploading && reviewQuestions.length === 0 && !strategyData} />
 
         {/* Diamond cluster — 菱形导航 */}
-        <div className="liquid-diamond-cluster relative h-[260px] w-[260px] sm:h-[300px] sm:w-[300px] mx-auto">
+        <div className="liquid-diamond-cluster relative h-[280px] w-[280px] sm:h-[340px] sm:w-[340px] mx-auto">
           {DIAMONDS.map((d, i) => (
             <button key={d.title} onClick={() => diamondAction(d.action)}
-              className={`liquid-diamond group absolute flex h-[110px] w-[110px] rotate-45 items-center justify-center rounded-2xl text-gray-100 transition duration-300 hover:z-10 sm:h-[128px] sm:w-[128px] sm:rounded-[22px] ${
+              className={`liquid-diamond group absolute flex h-[120px] w-[120px] rotate-45 items-center justify-center rounded-2xl text-gray-100 transition duration-300 hover:z-10 sm:h-[140px] sm:w-[140px] sm:rounded-[22px] ${
                 i === 0 ? 'left-1/2 top-0 -translate-x-1/2' :
                 i === 1 ? 'left-0 top-1/2 -translate-y-1/2' :
                 i === 2 ? 'right-0 top-1/2 -translate-y-1/2' :
@@ -285,19 +284,19 @@ export default function ProjectsPage() {
 
         {/* Projects */}
         <div id="projects" className="w-full space-y-3">
-          <h2 className="text-xs font-medium text-gray-600 text-center">最近项目</h2>
+          <h2 className="text-sm font-medium text-gray-500 text-center tracking-wide">最近项目</h2>
           {isLoading && <p className="text-gray-600 text-center py-6 text-sm">加载中...</p>}
           {projects?.length === 0 && (
-            <div className="liquid-card p-8 text-center">
+            <div className="border border-white/5 rounded-2xl p-10 text-center">
               <p className="text-gray-600 text-sm">还没有项目</p>
-              <button onClick={() => fileRef.current?.click()} className="mt-3 text-orange-400 text-xs hover:underline">上传第一个文档 →</button>
+              <button onClick={() => fileRef.current?.click()} className="mt-3 text-gray-400 text-xs hover:text-white transition-colors">上传第一个文档 →</button>
             </div>
           )}
           {projects?.map(p => (
-            <div key={p.id} className="liquid-card px-4 py-3 cursor-pointer group flex items-center justify-between hover:border-orange-500/20"
+            <div key={p.id} className="border border-white/5 rounded-2xl px-5 py-4 cursor-pointer group flex items-center justify-between hover:border-white/10 transition-colors"
               onClick={() => navigate('/generate/' + p.id)}>
               <div>
-                <span className="text-sm text-gray-200 group-hover:text-white">{p.name}</span>
+                <span className="text-sm text-gray-300 group-hover:text-white">{p.name}</span>
                 <span className="ml-3 text-[11px] text-gray-700">{p.generation_count} 次 · {new Date(p.created_at).toLocaleDateString('zh-CN')}</span>
               </div>
               <button onClick={e => { e.stopPropagation(); if (confirm('删除?')) delMut.mutate(p.id); }}
@@ -315,8 +314,8 @@ export default function ProjectsPage() {
             <input className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-gray-100 placeholder-gray-600" placeholder="项目名称" value={name} onChange={e => setName(e.target.value)} />
             <input className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-gray-100 placeholder-gray-600" placeholder="描述（可选）" value={desc} onChange={e => setDesc(e.target.value)} />
             <div className="flex gap-2">
-              <button onClick={() => createMut.mutate()} disabled={!name.trim()} className="px-4 py-2 bg-orange-500 rounded-lg text-sm">创建</button>
-              <button onClick={() => setShowCreate(false)} className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm">取消</button>
+              <button onClick={() => createMut.mutate()} disabled={!name.trim()} className="px-4 py-2 bg-white rounded-lg text-sm text-black font-medium">创建</button>
+              <button onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm text-gray-500 hover:text-white transition-colors">取消</button>
             </div>
           </div>
         </div>
