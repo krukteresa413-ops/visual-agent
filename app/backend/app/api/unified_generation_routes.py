@@ -181,6 +181,33 @@ async def generate_from_document(
     }
 
 
+
+# ── Strategy preview ──────────────────────────────────────────────────
+
+from pydantic import BaseModel as PydanticBase
+
+class StrategyPreviewRequest(PydanticBase):
+    brief: dict
+    platform_id: str | None = None
+
+@router.post("/strategy/preview")
+async def strategy_preview(req: StrategyPreviewRequest):
+    """生成创意策略预览 — 不生成素材，只返回策略方向供用户确认。"""
+    try:
+        strategy = await agent.generate_visual_strategy(req.brief)
+        # 也支持传入 platform_id 让策略结合平台
+        if req.platform_id:
+            # 重新生成时指定平台（可选扩展）
+            pass
+        return {
+            "strategy": strategy.model_dump() if hasattr(strategy, 'model_dump') else strategy,
+            "display_context": strategy.to_context_string() if hasattr(strategy, 'to_context_string') else str(strategy),
+        }
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"策略生成失败: {str(e)}")
+
+
 # ── History endpoints ──────────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/history")

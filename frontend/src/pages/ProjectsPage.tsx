@@ -4,6 +4,7 @@ import { listProjects, createProject, deleteProject } from '../api/client';
 import { useNavigate } from 'react-router-dom';
 import ReviewQuestions from '../components/ReviewQuestions';
 import AgentProgress from '../components/AgentProgress';
+import StrategyPanel from '../components/StrategyPanel';
 
 const SCENES = [
   { icon: '🛍️', name: '电商上新' },
@@ -50,6 +51,8 @@ export default function ProjectsPage() {
   // 追问状态
   const [reviewQuestions, setReviewQuestions] = useState<Array<{field:string;level:string;question:string;hint:string}>>([]);
   const [reviewBrief, setReviewBrief] = useState<Record<string, unknown> | null>(null);
+  const [strategyData, setStrategyData] = useState<any>(null);
+  const [strategyLoading, setStrategyLoading] = useState(false);
 
   const { data: projects, isLoading } = useQuery({ queryKey: ['projects'], queryFn: listProjects });
   const createMut = useMutation({
@@ -65,6 +68,40 @@ export default function ProjectsPage() {
     else setShowCreate(true);
   };
 
+  const fetchStrategyPreview = async (brief: any) => {
+    setStrategyLoading(true);
+    try {
+      const resp = await fetch('/api/v1/strategy/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brief, platform_id: selectedPlatform }),
+      });
+      const data = await resp.json();
+      setStrategyData(data.strategy);
+      setReviewQuestions([]);
+      setReviewBrief(brief);
+    } catch (e) {
+      alert('策略生成失败，请重试');
+    }
+    finally { setStrategyLoading(false); }
+  };
+
+  const confirmGenerate = async () => {
+    if (!reviewBrief) return;
+    setStrategyData(null);
+    const fd = new FormData();
+    fd.append('parsed_brief_json', JSON.stringify(reviewBrief));
+    fd.append('skip_review', 'true');
+    fd.append('project_id', '2');
+    if (selectedPlatform) fd.append('platform_id', selectedPlatform);
+    await callGenerateAPI(fd);
+  };
+
+  const retryStrategy = async () => {
+    if (!reviewBrief) return;
+    await fetchStrategyPreview(reviewBrief);
+  };
+
   const callGenerateAPI = async (formData: FormData) => {
     if (selectedPlatform) formData.append('platform_id', selectedPlatform);
     setUploading(true);
@@ -75,8 +112,12 @@ export default function ProjectsPage() {
         // 显示追问
         setReviewQuestions(data.questions || []);
         setReviewBrief(data.parsed_brief);
-      } else if (data.parsed_brief) {
+      } else if (data.parsed_brief && data.generation) {
+        // 完整生成完成 → 跳转结果页
         navigate('/generate/2', { state: { brief: data.parsed_brief, result: data.generation } });
+      } else if (data.parsed_brief) {
+        // 追问已解决但还未生成 → 拉取策略预览
+        fetchStrategyPreview(data.parsed_brief);
       } else {
         alert(data.detail || '生成失败');
       }
@@ -154,7 +195,7 @@ export default function ProjectsPage() {
         )}
 
         {/* Input area — hidden during review */}
-        {reviewQuestions.length === 0 && (
+        {reviewQuestions.length === 0 && !strategyData && (
           <div className="w-full space-y-4">
             <div className="liquid-card p-3">
               <div className="flex gap-2">
@@ -205,8 +246,18 @@ export default function ProjectsPage() {
           </div>
         )}
 
+        {/* Strategy confirmation — shown after review resolved */}
+        {strategyData && reviewBrief && (
+          <StrategyPanel
+            strategy={strategyData}
+            onConfirm={confirmGenerate}
+            onRetry={retryStrategy}
+            loading={uploading || strategyLoading}
+          />
+        )}
+
         {/* Agent progress — shown during generation */}
-        <AgentProgress active={uploading && reviewQuestions.length === 0} />
+        <AgentProgress active={uploading && reviewQuestions.length === 0 && !strategyData} />
 
         {/* Diamond cluster — 菱形导航 */}
         <div className="liquid-diamond-cluster relative h-[260px] w-[260px] sm:h-[300px] sm:w-[300px] mx-auto">
