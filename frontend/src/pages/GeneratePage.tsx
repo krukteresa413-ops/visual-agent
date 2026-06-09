@@ -9,6 +9,7 @@ import MissingFieldsAlert from '../components/MissingFieldsAlert';
 import ImageUploader from '../components/ImageUploader';
 import DocumentUploader from '../components/DocumentUploader';
 import ResultTabs from '../components/ResultTabs';
+import CanvasView from '../components/CanvasView';
 
 const DF: ProductBrief = { product_name:'', category:'', specifications:[], selling_points:[], target_market:[], usage_scenarios:[], brand_style: "" };
 
@@ -22,6 +23,7 @@ export default function GeneratePage() {
   const [mode, setMode] = useState<'manual'|'parse'|'doc'>('manual');
   const [missing, setMissing] = useState<any[]>([]);
   const [startTime, setStartTime] = useState(0);
+  const [viewMode, setViewMode] = useState<'tabs' | 'canvas'>('canvas');
   const [uploadedImages, setUploadedImages] = useState<Array<{filename:string;url:string}>>([]);
 
     useEffect(() => {
@@ -59,6 +61,12 @@ export default function GeneratePage() {
         <div className="flex items-center gap-3">
           {result && <span className="text-xs text-gray-400">耗时 {gen.data?.elapsed||'?'}s</span>}
           {result && <button onClick={copy} className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm text-gray-200 transition-all">{copied?'已复制':'复制 Markdown'}</button>}
+          {result && (
+            <button onClick={() => setViewMode(m => m === 'canvas' ? 'tabs' : 'canvas')}
+              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-gray-300 transition-all">
+              {viewMode === 'canvas' ? '📋 标签视图' : '🎨 画布视图'}
+            </button>
+          )}
         </div>
       </header>
 
@@ -90,7 +98,18 @@ export default function GeneratePage() {
 
           {/* Right: results */}
           <div className="liquid-card p-6 min-h-[600px]">
-            {result ? <ResultTabs plan={result} images={images} /> : (
+            {result ? (
+            viewMode === 'canvas' ? (
+              <CanvasView
+                mainImage={result.main_image}
+                whiteBg={result.white_bg}
+                sceneImages={result.scene_images}
+                sellingPoints={result.selling_points}
+                videoScripts={result.video_scripts}
+                adMaterial={result.ad_material}
+              />
+            ) : <ResultTabs plan={result} images={images} />
+          ) : (
               <div className="flex flex-col items-center justify-center h-full text-gray-500">
                 <div className="text-5xl mb-5">✨</div>
                 <p className="text-lg mb-2">准备好开始了吗？</p>
