@@ -15,7 +15,7 @@ from app.schemas.visual_assets import (
 )
 from app.services.llm_client import LLMClient
 from app.services.prompt_loader import PromptLoader
-from app.services.platform_prompt_loader import get_platform_context
+from app.services.platform_prompt_loader import get_platform_context, load_platform_prompt
 
 
 
@@ -39,11 +39,16 @@ class VisualAgent:
 
     @staticmethod
     def _enrich_system(system: str, platform_id: str | None) -> str:
-        """Inject platform context into system prompt if platform_id is set."""
+        """Inject platform context + full template into system prompt."""
         if platform_id:
+            parts = [system]
             ctx = get_platform_context(platform_id)
             if ctx:
-                return system + "\n" + ctx
+                parts.append(ctx)
+            tmpl = load_platform_prompt(platform_id, {})
+            if tmpl:
+                parts.append(tmpl)
+            return "\n".join(parts)
         return system
 
     async def generate_main_image(self, brief: dict, platform_id: str | None = None) -> MainImagePlan:
@@ -362,4 +367,3 @@ JSON 输出 6-10 模块"""
         up = f"{brief.get('product_name','')} {brief.get('category','')} | {', '.join(brief.get('specifications',[]))} | {', '.join(brief.get('selling_points',[]))} | {', '.join(brief.get('target_market',[]))} | {', '.join(brief.get('target_customer',[]))} | {', '.join(brief.get('usage_scenarios',[]))} | {brief.get('brand_style','')}"
         raw = await self._llm.call(system_prompt=self.VISUAL_STRATEGY_SYSTEM_PROMPT, user_prompt=up)
         return raw
-
