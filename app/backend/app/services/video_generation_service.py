@@ -198,6 +198,84 @@ class PikaVideoProvider(VideoGenerationProvider):
         )
 
 
+# ---------------------------------------------------------------------------
+# Lovart video provider
+# ---------------------------------------------------------------------------
+
+
+class LovartVideoProvider(VideoGenerationProvider):
+    """Lovart AI video generation provider.
+
+    Requires LOVART_ACCESS_KEY and LOVART_SECRET_KEY in environment.
+    Uses X-Lovart-Access-Key and X-Lovart-Secret-Key headers for auth.
+    Client is lazily initialized on first generate() call.
+    """
+
+    descriptor = VideoProviderDescriptor(
+        name="lovart",
+        display_name="Lovart AI",
+        description="Lovart — AI 设计智能体, 高质量视频生成",
+    )
+
+    def __init__(self, access_key: str | None = None, secret_key: str | None = None):
+        import os as _os
+        self._access_key = access_key or _os.getenv("LOVART_ACCESS_KEY", "")
+        self._secret_key = secret_key or _os.getenv("LOVART_SECRET_KEY", "")
+        self._client = None
+
+    def _get_client(self):
+        if self._client is None:
+            import httpx
+            self._client = httpx.AsyncClient(
+                base_url="https://api.lovart.ai",
+                headers={
+                    "X-Lovart-Access-Key": self._access_key,
+                    "X-Lovart-Secret-Key": self._secret_key,
+                    "Content-Type": "application/json",
+                },
+                timeout=300.0,
+            )
+        return self._client
+
+    async def generate(self, request: VideoGenerationRequest) -> VideoGenerationResult:
+        client = self._get_client()
+        payload = {
+            "prompt": request.prompt,
+            "duration": request.duration,
+            "width": request.width,
+            "height": request.height,
+            "fps": request.fps,
+        }
+        if request.seed is not None:
+            payload["seed"] = request.seed
+        if request.model:
+            payload["model"] = request.model
+
+        resp = await client.post("/v1/videos/generations", json=payload)
+        if resp.status_code >= 400:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Lovart video error ({resp.status_code}): {resp.text[:200]}",
+            )
+        data = resp.json()
+
+        videos = []
+        for item in data.get("data", []):
+            videos.append(GeneratedVideo(
+                url=item.get("url", ""),
+                duration=request.duration,
+                width=request.width,
+                height=request.height,
+                fps=request.fps,
+                provider_asset_id=item.get("id"),
+            ))
+
+        return VideoGenerationResult(
+            provider="lovart",
+            status="succeeded",
+            videos=videos,
+        )
+
 
 class VideoGenerationService:
     def __init__(self) -> None:
@@ -231,3 +309,4 @@ video_generation_service = VideoGenerationService()
 video_generation_service.register(LocalPlaceholderVideoProvider())
 video_generation_service.register(RunwayVideoProvider())
 video_generation_service.register(PikaVideoProvider())
+video_generation_service.register(LovartVideoProvider())

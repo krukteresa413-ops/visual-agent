@@ -4,7 +4,7 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 
-VideoProviderKind = Literal["local", "runway", "pika", "kling", "sora", "luma", "hailuo", "minimax"]
+VideoProviderKind = Literal["local", "runway", "pika", "kling", "sora", "luma", "hailuo", "minimax", "lovart"]
 
 
 class VideoGenerationRequest(BaseModel):

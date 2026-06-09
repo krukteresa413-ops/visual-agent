@@ -17,6 +17,7 @@ interface Props {
 
 export default function ReviewQuestions({ questions, parsedBrief, onResubmit, onSkip, loading }: Props) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
 
   const requiredQs = questions.filter(q => q.level === 'required');
   const recommendedQs = questions.filter(q => q.level === 'recommended');
@@ -26,6 +27,8 @@ export default function ReviewQuestions({ questions, parsedBrief, onResubmit, on
   };
 
   const handleSubmit = () => {
+    if (submitted) return; // Prevent double-submit
+    setSubmitted(true);
     // Only submit non-empty answers
     const filled: Record<string, string> = {};
     for (const [k, v] of Object.entries(answers)) {
@@ -94,17 +97,17 @@ export default function ReviewQuestions({ questions, parsedBrief, onResubmit, on
       <div className="flex items-center justify-between pt-2 border-t border-white/5">
         <button
           onClick={onSkip}
-          disabled={loading}
+          disabled={submitted || loading}
           className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
         >
           跳过，直接生成 →
         </button>
         <button
           onClick={handleSubmit}
-          disabled={!hasRequiredAnswer || loading}
+          disabled={submitted || !hasRequiredAnswer || loading}
           className="px-5 py-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-30 rounded-lg text-sm font-medium transition-all"
         >
-          {loading ? '提交中...' : '提交补充信息'}
+          {submitted ? '已提交' : loading ? '提交中...' : '提交补充信息'}
         </button>
       </div>
     </div>
