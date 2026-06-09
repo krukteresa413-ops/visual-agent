@@ -127,6 +127,7 @@ class VisualAgent:
         platform_id: str | None = None,
         db=None,
         brief_id: int = None,
+        task_types: list = None,
     ) -> VisualAssetPlanOut:
         """
         PRD 5.1：一次生成六类素材方案。
@@ -175,6 +176,7 @@ class VisualAgent:
         platform_id: str | None = None,
         db=None,
         brief_id: int = None,
+        task_types: list = None,
     ) -> VisualAssetPlanOut:
         """PRD 5.1 创意策略驱动版：策略 → 注入 → 并行生成六类素材"""
         import asyncio
