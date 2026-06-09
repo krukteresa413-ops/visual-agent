@@ -22,6 +22,7 @@ export default function GeneratePage() {
   const [mode, setMode] = useState<'manual'|'parse'|'doc'>('manual');
   const [missing, setMissing] = useState<any[]>([]);
   const [startTime, setStartTime] = useState(0);
+  const [uploadedImages, setUploadedImages] = useState<Array<{filename:string;url:string}>>([]);
 
     useEffect(() => {
     const st = (window as any).__reactRouterState || history.state?.usr || {};
@@ -78,7 +79,7 @@ export default function GeneratePage() {
             {mode==='doc' && <DocumentUploader onParsed={(p,m,_preview)=>{setBrief(p);setMissing(m);setMode('manual');}} />}
             <MissingFieldsAlert fields={missing} onDismiss={()=>setMissing([])} />
             <div className="liquid-card p-6"><BriefForm value={brief} onChange={setBrief} /></div>
-            <ImageUploader images={[]} onChange={()=>{}} />
+            <ImageUploader images={uploadedImages} onChange={setUploadedImages} />
             <button onClick={()=>gen.mutate()} disabled={!ready||gen.isPending} className={`w-full py-4 rounded-2xl font-semibold text-base transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed ${btnClass}`}>
               {gen.isPending
                 ? <span className="flex items-center justify-center gap-3"><svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>并行生成中...</span>
