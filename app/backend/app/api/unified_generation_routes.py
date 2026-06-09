@@ -5,6 +5,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from app.services.document_parser import parse_document
 from app.services.brief_parser import parse_brief_text
 from app.services.brief_reviewer import BriefReviewer
+from app.services.compliance import ComplianceChecker
 from app.services.visual_agent import VisualAgent
 
 router = APIRouter(prefix="/api/v1", tags=["unified-generation"])
@@ -75,6 +76,9 @@ async def generate_from_document(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"AI 解析失败: {str(e)}")
 
+    # Compliance check
+    compliance_warnings = ComplianceChecker.check_brief(brief)
+
     # Merge user answers into brief
     if answers:
         try:
@@ -98,7 +102,8 @@ async def generate_from_document(
         if required_missing:
             return {
                 "needs_review": True, "parsed_brief": brief,
-                "questions": questions, "generation": None, "elapsed_seconds": 0,
+                "questions": questions, "compliance_warnings": compliance_warnings,
+                "generation": None, "elapsed_seconds": 0,
             }
         if questions:
             brief["_review_questions"] = questions
@@ -143,6 +148,7 @@ async def generate_from_document(
 
     return {
         "needs_review": False,
+        "compliance_warnings": compliance_warnings,
         "filename": file.filename if file else None,
         "extracted_text_preview": extracted_text[:300] if not parsed_brief_json else None,
         "parsed_brief": brief,
