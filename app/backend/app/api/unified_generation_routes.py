@@ -43,6 +43,9 @@ async def generate_from_document(
     if parsed_brief_json:
         try:
             brief = _json.loads(parsed_brief_json)
+            # Validate expected keys exist
+            if not isinstance(brief, dict):
+                raise HTTPException(status_code=400, detail="parsed_brief_json 必须是 JSON 对象")
         except _json.JSONDecodeError:
             raise HTTPException(status_code=400, detail="parsed_brief_json 格式无效")
     else:
@@ -50,11 +53,18 @@ async def generate_from_document(
         if file:
             if file.content_type and file.content_type not in ALLOWED_TYPES:
                 raise HTTPException(status_code=400, detail=f"不支持的文件类型: {file.content_type}")
+            # Check size before reading to avoid memory exhaustion
+            if file.size and file.size > MAX_SIZE:
+                raise HTTPException(status_code=400, detail="文件超过 20MB")
             content = await file.read()
             if len(content) > MAX_SIZE:
                 raise HTTPException(status_code=400, detail="文件超过 20MB")
             os.makedirs(UPLOAD_DIR, exist_ok=True)
-            ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "bin"
+            # Safe extension extraction — prevent path traversal
+            safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '_', file.filename or "upload")
+            ext = safe_filename.rsplit(".", 1)[-1].lower() if "." in safe_filename else "bin"
+            if "/" in ext or "\\" in ext or len(ext) > 10:
+                ext = "bin"
             tmp = os.path.join(UPLOAD_DIR, f"unified_{uuid.uuid4().hex[:8]}.{ext}")
             with open(tmp, "wb") as f:
                 f.write(content)
@@ -89,16 +99,18 @@ async def generate_from_document(
             # Cross-project fallback: search by product name
             brand_name = brief.get("product_name", "") if isinstance(brief, dict) else ""
             if brand_name:
+                from sqlalchemy import func as sa_func
                 bp = bdb.query(BrandProfile).filter(
-                    BrandProfile.name.ilike(f"%{brand_name}%")
+                    BrandProfile.name.ilike(sa_func.concat('%', brand_name, '%'))
                 ).first()
         if bp:
             brand_context = bp.to_prompt_context()
             brief["_brand_context"] = brand_context
             bp_id = bp.id
         bdb.close()
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Brand profile lookup failed: {e}")
 
     # Compliance check
     compliance_warnings = ComplianceChecker.check_brief(brief)

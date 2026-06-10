@@ -92,6 +92,13 @@ class LayoutAgent:
     def __init__(self):
         self._llm = LLMClient()
 
+    @staticmethod
+    def _sanitize_field(value, max_len=200):
+        s = str(value)[:max_len]
+        s = s.replace("<", "&lt;").replace(">", "&gt;")
+        return s
+
+
     async def generate_layout(
         self,
         project_id: int,
@@ -112,12 +119,12 @@ class LayoutAgent:
         platform_context = _get_platform_layout_context(platform_id)
 
         user_prompt = LAYOUT_USER_TEMPLATE.format(
-            product_name=brief.get("product_name", ""),
-            category=brief.get("category", ""),
-            selling_points=", ".join(brief.get("selling_points", [])),
-            target_market=", ".join(brief.get("target_market", [])),
-            target_customer=", ".join(brief.get("target_customer", [])),
-            brand_style=brief.get("brand_style", "professional"),
+            product_name=LayoutAgent._sanitize_field(brief.get("product_name", "")),
+            category=LayoutAgent._sanitize_field(brief.get("category", "")),
+            selling_points=LayoutAgent._sanitize_field(", ".join(brief.get("selling_points", []))),
+            target_market=LayoutAgent._sanitize_field(", ".join(brief.get("target_market", []))),
+            target_customer=LayoutAgent._sanitize_field(", ".join(brief.get("target_customer", []))),
+            brand_style=LayoutAgent._sanitize_field(brief.get("brand_style", "professional")),
             asset_plan_summary=asset_summary,
             platform_context=platform_context,
             brand_colors=brand_colors,

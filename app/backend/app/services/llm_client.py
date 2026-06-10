@@ -23,8 +23,14 @@ class LLMClient:
 
     def __init__(self):
         self._provider = llm_service.get_active()
-        self._model = self._provider.descriptor.default_model
+        if self._provider is None:
+            raise RuntimeError("No LLM provider available. Check configuration.")
         self._client = self._provider._client  # backward compat for tests
+
+    @property
+    def client(self):
+        """Public accessor for backward-compatible test access."""
+        return self._client
 
     async def call(
         self,

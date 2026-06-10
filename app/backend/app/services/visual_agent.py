@@ -153,22 +153,23 @@ class VisualAgent:
             from app.services.layout_agent import LayoutAgent
             layout_agent = LayoutAgent()
             asset_dict = {
-                main_image: main_image.model_dump() if main_image else None,
-                scene_images: [s.model_dump() for s in (scene_images or [])],
-                selling_points: [s.model_dump() for s in (selling_points or [])],
-                video_scripts: [v.model_dump() for v in (video_scripts or [])],
-                ad_material: ad_material.model_dump() if ad_material else None,
+                "main_image": main_image.model_dump() if main_image else None,
+                "scene_images": [s.model_dump() for s in (scene_images or [])],
+                "selling_points": [s.model_dump() for s in (selling_points or [])],
+                "video_scripts": [v.model_dump() for v in (video_scripts or [])],
+                "ad_material": ad_material.model_dump() if ad_material else None,
             }
             layout_plan = await layout_agent.generate_layout(
                 project_id=project_id,
                 brief=brief,
                 asset_plan=asset_dict,
                 platform_id=platform_id,
-                brand_context=brief.get(_brand_context),
+                brand_context=brief.get("_brand_context"),
             )
             layout_plan = layout_plan.model_dump()
-        except Exception:
-            pass  # Layout is optional, don't block the whole generation
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Layout agent skipped: {e}")
 
         result = VisualAssetPlanOut(
             project_id=project_id,
@@ -253,22 +254,23 @@ class VisualAgent:
             from app.services.layout_agent import LayoutAgent
             layout_agent = LayoutAgent()
             asset_dict = {
-                main_image: main_image.model_dump() if main_image else None,
-                scene_images: [s.model_dump() for s in (scene_images or [])],
-                selling_points: [s.model_dump() for s in (selling_points or [])],
-                video_scripts: [v.model_dump() for v in (video_scripts or [])],
-                ad_material: ad_material.model_dump() if ad_material else None,
+                "main_image": main_image.model_dump() if main_image else None,
+                "scene_images": [s.model_dump() for s in (scene_images or [])],
+                "selling_points": [s.model_dump() for s in (selling_points or [])],
+                "video_scripts": [v.model_dump() for v in (video_scripts or [])],
+                "ad_material": ad_material.model_dump() if ad_material else None,
             }
             layout_plan = await layout_agent.generate_layout(
                 project_id=project_id,
                 brief=brief,
                 asset_plan=asset_dict,
                 platform_id=platform_id,
-                brand_context=brief.get(_brand_context),
+                brand_context=brief.get("_brand_context"),
             )
             layout_plan = layout_plan.model_dump()
-        except Exception:
-            pass  # Layout is optional, don't block the whole generation
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Layout agent skipped: {e}")
 
         result = VisualAssetPlanOut(
             project_id=project_id,
@@ -326,8 +328,9 @@ class VisualAgent:
                 if gen.images:
                     img = gen.images[0]
                     result["main_image"] = {"url": img.url, "width": img.width, "height": img.height}
-            except Exception:
-                pass  # partial failure OK
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"Sub-task failed: {e}")  # partial failure OK
 
         # Generate scene images
         for scene in (plan.scene_images or []):

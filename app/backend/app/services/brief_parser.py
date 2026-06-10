@@ -62,6 +62,21 @@ async def parse_brief_text(text: str, llm: Optional[LLMClient] = None) -> dict:
         temperature=0.3,
     )
 
+    if not isinstance(raw, dict):
+        import json as _json, re as _re, logging
+        _log = logging.getLogger(__name__)
+        raw_str = str(raw)
+        match = _re.search(r'\{.*\}', raw_str, _re.DOTALL)
+        if match:
+            try:
+                raw = _json.loads(match.group())
+            except _json.JSONDecodeError:
+                _log.error(f"Failed to parse LLM response as JSON: {raw_str[:200]}")
+                raise ValueError("LLM response is not valid JSON")
+        else:
+            _log.error(f"No JSON object found in LLM response: {raw_str[:200]}")
+            raise ValueError("LLM response does not contain JSON")
+
     # Normalize: list fields must never be None (protects Jinja2 templates)
     for field in LIST_FIELDS:
         if raw.get(field) is None:
