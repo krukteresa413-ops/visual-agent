@@ -19,6 +19,7 @@ from app.api.unified_generation_routes import router as unified_router
 from app.api.asset_routes import router as asset_router
 from app.api.copywriting_routes import router as copywriting_router
 from app.api.layout_routes import router as layout_router
+from app.api.canvas_routes import router as canvas_router
 
 load_dotenv("/opt/visual-agent/.env")
 
@@ -40,6 +41,7 @@ app.include_router(asset_router)
 app.include_router(copywriting_router)
 app.include_router(layout_router)
 app.include_router(unified_router)
+app.include_router(canvas_router)
 
 
 @app.get("/health")
