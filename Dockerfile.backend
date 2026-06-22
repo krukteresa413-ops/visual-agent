@@ -1,0 +1,22 @@
+# ── Backend: Python FastAPI ──
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python deps
+COPY app/backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt python-dotenv requests
+
+# App code
+COPY app/backend/ .
+
+# Uploads dir
+RUN mkdir -p /opt/visual-agent/uploads/video-edit /opt/visual-agent/uploads/video-edit-renders
+
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

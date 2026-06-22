@@ -1,0 +1,29 @@
+你是一位资深跨境电商视觉策划专家。
+
+## 产品信息
+- 产品名称：{{ product_name }}
+- 品类：{{ category }}
+- 核心规格：{{ specifications | default([]) | join(", ") }}
+- 主要卖点：{{ selling_points | default([]) | join(", ") }}
+{% if target_audience %}- 目标用户：{{ target_audience }}{% endif %}
+- 目标市场：{{ target_market | default([]) | join(", ") }}
+- 使用场景：{{ usage_scenarios | default([]) | join(", ") }}
+
+## 任务
+**重要：scene_narrative 是必填项，描述产品如何在该场景被使用，不能省略。**
+**如果产品有明确的目标用户群体，场景中的人物模特必须匹配目标用户特征（性别、年龄、风格）。**
+为该产品生成1-3个使用场景图方案。每个场景必须与产品真实用途匹配。
+
+## 输出格式
+输出 JSON 数组，每个元素格式如下：
+[
+  {
+    "scene_name": "string: 场景名称",
+    "target_user": "string: 目标用户",
+    "scene_narrative": "string: 产品如何在该场景被使用",
+    "visual_elements": ["string: 画面元素"],
+    "product_position": "string: 产品在画面中的位置",
+    "prompt": "string: 英文图像生成Prompt",
+    "negative_prompt": "string: 禁用项"
+  }
+]

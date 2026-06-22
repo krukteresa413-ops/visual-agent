@@ -1,0 +1,227 @@
+INFO:     Started server process [90504]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Started server process [166203]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:50646 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:50652 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50668 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:50684 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:50686 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:33942 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:33946 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:51120 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:51122 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:51130 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:51138 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:48608 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:48620 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:48624 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:48640 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:50692 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:50702 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:38962 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:38966 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:50018 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:53426 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:53440 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:53442 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:53456 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:53470 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47810 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47814 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47816 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47824 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47832 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:56792 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:56794 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:56806 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:56810 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:56826 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47192 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47198 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47208 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47222 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47238 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:58722 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:58734 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:58750 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:58756 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:58768 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:42892 - "GET /api/v1/generation/task/04605b1b-d620-4da5-9725-e08a1661cc45 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:42902 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:42904 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:39488 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:39494 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:39246 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:39258 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:60744 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:50466 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:50474 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:50476 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:45346 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:45362 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:52574 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:52576 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:60472 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:60486 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47804 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47820 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47828 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:43408 - "GET /api/v1/brand/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:53900 - "GET /api/v1/inspirations/categories HTTP/1.0" 200 OK
+INFO:     127.0.0.1:53904 - "GET /api/v1/inspirations?category=poster&limit=50 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:47230 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:47246 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:57706 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:38562 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:42008 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:42030 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:41286 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:41294 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:42014 - "POST /api/v1/upload/document/parse HTTP/1.0" 200 OK
+INFO:     127.0.0.1:46950 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:46962 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:46978 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:42002 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:43238 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:43240 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:42022 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:42024 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:56102 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:56106 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:56120 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:54764 - "GET /api/v1/api/v1/dashboard/ HTTP/1.0" 404 Not Found
+INFO:     Started server process [172155]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:48598 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38756 - "POST /api/v1/video-edit/projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58528 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:52344 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:52352 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:52354 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:52366 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:52382 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41136 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41142 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41150 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41154 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:40330 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51572 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:39702 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:58654 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:38844 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:38856 - "GET /api/v1/api/v1/campaign/2 HTTP/1.0" 404 Not Found
+INFO:     127.0.0.1:51864 - "GET /api/v1/dashboard/ HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37144 - "GET /api/v1/projects/2/timeline HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37160 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37164 - "GET /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37180 - "GET /api/v1/projects/2/canvas-assets HTTP/1.0" 200 OK
+Loading pretrained model MUSIQ from /root/.cache/torch/hub/pyiqa/musiq_koniq_ckpt-e95806b9.pth
+INFO:     127.0.0.1:60040 - "POST /api/v1/aesthetic/rank HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36028 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46982 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:54688 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:54690 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51646 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:54580 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:40892 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:39906 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36522 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36536 - "GET /api/v1/projects/2/timeline HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36550 - "GET /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36564 - "GET /api/v1/projects/2/canvas-assets HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36592 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36598 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36578 - "POST /api/v1/aesthetic/rank HTTP/1.0" 200 OK
+INFO:     127.0.0.1:48780 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:46432 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35750 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:38220 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:38226 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:38240 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:38252 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:46410 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:46414 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:46424 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:46438 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:46448 - "GET /api/v1/projects/2/canvas-assets?type=videos HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42336 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42344 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42358 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:42360 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37452 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37460 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37466 - "GET /api/v1/projects/2/timeline HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37480 - "GET /api/v1/projects/2/canvas-assets HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37488 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37496 - "GET /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37504 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37524 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37532 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:48994 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49006 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49018 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37508 - "POST /api/v1/aesthetic/rank HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49028 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49040 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49056 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49070 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49050 - "POST /api/v1/aesthetic/compare HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49078 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:49080 - "POST /api/v1/aesthetic/compare HTTP/1.0" 200 OK
+INFO:     127.0.0.1:45370 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:45372 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:45348 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:45378 - "POST /api/v1/aesthetic/compare HTTP/1.0" 200 OK
+INFO:     127.0.0.1:45356 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36254 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36276 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36292 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36304 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36260 - "POST /api/v1/aesthetic/compare HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36314 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:36320 - "POST /api/v1/aesthetic/compare HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51988 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51992 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:60934 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35088 - "GET /api/v1/projects/2/timeline HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35102 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35116 - "GET /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35128 - "GET /api/v1/projects/2/canvas-assets HTTP/1.0" 200 OK
+INFO:     127.0.0.1:59358 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:35126 - "POST /api/v1/aesthetic/rank HTTP/1.0" 200 OK
+INFO:     127.0.0.1:59370 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:59380 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:59348 - "POST /api/v1/aesthetic/rank HTTP/1.0" 200 OK
+INFO:     127.0.0.1:59386 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41102 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41104 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41110 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41122 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:41510 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37454 - "GET /api/v1/projects/2/timeline HTTP/1.0" 200 OK
+INFO:     127.0.0.1:37458 - "GET /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51836 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51854 - "GET /api/v1/projects/2/canvas-assets HTTP/1.0" 200 OK
+INFO:     127.0.0.1:51838 - "POST /api/v1/aesthetic/rank HTTP/1.0" 200 OK
+INFO:     127.0.0.1:50608 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:52850 - "PUT /api/v1/projects/2/canvas-state HTTP/1.0" 200 OK
+INFO:     127.0.0.1:52866 - "POST /api/v1/aesthetic/compare HTTP/1.0" 200 OK
+LLM compare failed: 503
+INFO:     127.0.0.1:59856 - "POST /api/v1/aesthetic/compare HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58886 - "POST /api/v1/aesthetic/compare HTTP/1.1" 422 Unprocessable Entity
+LLM compare failed: 503
+INFO:     127.0.0.1:44570 - "POST /api/v1/aesthetic/compare HTTP/1.1" 200 OK
+LLM compare failed: 503
+INFO:     127.0.0.1:37058 - "POST /api/v1/aesthetic/compare HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59762 - "GET /api/v1/brief/project/2 HTTP/1.0" 200 OK
+LLM compare failed: 503
+INFO:     127.0.0.1:58090 - "POST /api/v1/aesthetic/compare HTTP/1.1" 200 OK

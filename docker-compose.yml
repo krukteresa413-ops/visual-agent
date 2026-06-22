@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: moyag-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - uploads_data:/opt/visual-agent/uploads
+    networks:
+      - moyag
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: moyag-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - moyag
+
+volumes:
+  uploads_data:
+
+networks:
+  moyag:
+    driver: bridge

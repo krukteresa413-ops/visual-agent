@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# Env
+.env
+*.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads (user data, large files)
+uploads/
+!uploads/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Test
+.pytest_cache/
+.coverage
+htmlcov/
+*.bak
+*_backup_*
+nohup.out
+
+# Local virtual environments
+venv/
+.env.bak.
+llm_provider.py.bak.
+
+*.py.bak.*
+*.pre_video
+*.bak.*
+backup-*/
