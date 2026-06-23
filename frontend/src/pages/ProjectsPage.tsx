@@ -6,6 +6,9 @@ import ReviewQuestions from '../components/ReviewQuestions';
 import AgentProgress from '../components/AgentProgress';
 import StrategyPanel from '../components/StrategyPanel';
 import ThemeToggle, { useTheme } from '../components/ThemeToggle';
+import InspirationPanel from '../components/InspirationPanel';
+import BrandKitPanel from '../components/BrandKitPanel';
+import Toast from '../components/Toast';
 
 const SCENES = [
   { icon: '🛍️', name: '电商上新' },
@@ -21,7 +24,7 @@ const SCENES = [
 ];
 
 const DIAMONDS = [
-  { title: '上传文档', desc: 'PDF/PPT/Word', icon: '📄', action: 'upload' },
+  { title: '灵感库', desc: '设计参考', icon: '💡', action: 'inspiration' },
   { title: '品牌套件', desc: '品牌管理', icon: '🎨', action: 'brand' },
   { title: '素材库', desc: '历史生成', icon: '📦', action: 'assets' },
   { title: '新建项目', desc: '手动创建', icon: '✨', action: 'create' },
@@ -55,6 +58,8 @@ export default function ProjectsPage() {
   const [reviewBrief, setReviewBrief] = useState<Record<string, unknown> | null>(null);
   const [strategyData, setStrategyData] = useState<any>(null);
   const [strategyLoading, setStrategyLoading] = useState(false);
+  const [showInspiration, setShowInspiration] = useState(false);
+  const [showBrandKit, setShowBrandKit] = useState(false);
 
   const { data: projects, isLoading } = useQuery({ queryKey: ['projects'], queryFn: listProjects });
   const createMut = useMutation({
@@ -64,8 +69,8 @@ export default function ProjectsPage() {
   const delMut = useMutation({ mutationFn: (id: number) => deleteProject(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }) });
 
   const diamondAction = (action: string) => {
-    if (action === 'upload') fileRef.current?.click();
-    else if (action === 'brand') navigate('/generate/2');
+    if (action === 'inspiration') setShowInspiration(true);
+    else if (action === 'brand') setShowBrandKit(true);
     else if (action === 'assets') document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth' });
     else setShowCreate(true);
   };
@@ -320,6 +325,18 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
+
+      {/* Inspiration Panel */}
+      {showInspiration && (
+        <InspirationPanel onClose={() => setShowInspiration(false)} />
+      )}
+
+      {/* Brand Kit Panel */}
+      {showBrandKit && (
+        <BrandKitPanel projectId={2} hasUploadedPdf={false} onClose={() => setShowBrandKit(false)} />
+      )}
+
+      <Toast />
     </div>
   );
 }

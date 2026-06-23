@@ -1,6 +1,8 @@
 export interface ProductBrief {
+  brand_name?: string;
   product_name: string;
   category: string;
+  target_audience?: string;
   specifications: string[];
   materials?: string[];
   selling_points: string[];
@@ -8,6 +10,11 @@ export interface ProductBrief {
   target_customer?: string[];
   usage_scenarios: string[];
   brand_style?: string;
+  target_country?: string;
+  cultural_taboos?: string;
+  publish_platform?: string;
+  scheduled_date?: string;
+  promotional_event?: string;
   compliance_notes?: string[];
   audience_type?: string;
 }

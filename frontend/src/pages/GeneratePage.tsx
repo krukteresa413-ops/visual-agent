@@ -5,6 +5,7 @@ import { generateAll, exportMarkdown, saveBrief, getProjectBrief } from '../api/
 import type { ProductBrief, VisualAssetPlan } from '../api/client';
 import BriefForm from '../components/BriefForm';
 import BriefParsePanel from '../components/BriefParsePanel';
+import BriefReviewPanel from '../components/BriefReviewPanel';
 import MissingFieldsAlert from '../components/MissingFieldsAlert';
 import ImageUploader from '../components/ImageUploader';
 import DocumentUploader from '../components/DocumentUploader';
@@ -24,6 +25,7 @@ export default function GeneratePage() {
   const [copied, setCopied] = useState(false);
   const [mode, setMode] = useState<'manual'|'parse'|'doc'>('manual');
   const [missing, setMissing] = useState<any[]>([]);
+  const [showReview, setShowReview] = useState(false);
   const [startTime, setStartTime] = useState(0);
   const { isLight, toggle: toggleTheme } = useTheme();
   const [viewMode, setViewMode] = useState<'tabs' | 'canvas'>('canvas');
@@ -73,57 +75,75 @@ export default function GeneratePage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-8 py-10">
-        <div className="grid gap-8" style={{gridTemplateColumns:result?'380px 1fr':'480px 1fr'}}>
-          {/* Left: input area */}
-          <div className="space-y-5">
-            {/* Mode selector */}
-            <div className="liquid-card p-6">
-              <div className="flex items-center gap-3 mb-3"><span className="text-2xl">📋</span><h2 className="text-lg font-semibold text-white">产品资料</h2></div>
-              <div className="flex gap-2">
-                <button onClick={()=>setMode('manual')} className={`flex-1 py-2 text-xs rounded-lg transition-colors ${mode==='manual'?'bg-orange-500 text-white':'bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10'}`}>手动填写</button>
-                <button onClick={()=>setMode('parse')} className={`flex-1 py-2 text-xs rounded-lg transition-colors ${mode==='parse'?'bg-blue-600 text-white':'bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10'}`}>智能解析</button>
-                <button onClick={()=>setMode('doc')} className={`flex-1 py-2 text-xs rounded-lg transition-colors ${mode==='doc'?'bg-green-600 text-white':'bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10'}`}>上传文档</button>
+        {showReview ? (
+          <div className="max-w-6xl mx-auto opacity-0 animate-[fadeIn_0.5s_ease-out_forwards] translate-y-5 animate-[slideUp_0.5s_ease-out_forwards]">
+            <BriefReviewPanel
+              brief={brief}
+              missing={missing}
+              onConfirm={(updatedBrief) => {
+                setBrief(updatedBrief);
+                setShowReview(false);
+                setMode('manual');
+              }}
+              onReupload={() => {
+                setShowReview(false);
+                setBrief(DF);
+              }}
+            />
+          </div>
+        ) : (
+          <div className="grid gap-8 transition-opacity duration-500" style={{gridTemplateColumns:result?'380px 1fr':'480px 1fr'}}>
+            {/* Left: input area */}
+            <div className="space-y-5">
+              {/* Mode selector */}
+              <div className="liquid-card p-6">
+                <div className="flex items-center gap-3 mb-3"><span className="text-2xl">📋</span><h2 className="text-lg font-semibold text-white">产品资料</h2></div>
+                <div className="flex gap-2">
+                  <button onClick={()=>setMode('manual')} className={`flex-1 py-2 text-xs rounded-lg transition-colors ${mode==='manual'?'bg-orange-500 text-white':'bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10'}`}>手动填写</button>
+                  <button onClick={()=>setMode('parse')} className={`flex-1 py-2 text-xs rounded-lg transition-colors ${mode==='parse'?'bg-blue-600 text-white':'bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10'}`}>智能解析</button>
+                  <button onClick={()=>setMode('doc')} className={`flex-1 py-2 text-xs rounded-lg transition-colors ${mode==='doc'?'bg-green-600 text-white':'bg-white/5 text-gray-400 hover:text-gray-200 border border-white/10'}`}>上传文档</button>
+                </div>
               </div>
+              {mode==='parse' && <BriefParsePanel onParsed={(p,m)=>{setBrief(p);setMissing(m);setShowReview(true);}} />}
+              {mode==='doc' && <DocumentUploader onParsed={(p,m,_preview)=>{setBrief(p);setMissing(m);setShowReview(true);}} />}
+              <MissingFieldsAlert fields={missing} onDismiss={()=>setMissing([])} />
+              <div className="liquid-card p-6"><BriefForm value={brief} onChange={setBrief} /></div>
+              <ImageUploader images={uploadedImages} onChange={setUploadedImages} />
+              <button onClick={()=>gen.mutate()} disabled={!ready||gen.isPending} className={`w-full py-4 rounded-2xl font-semibold text-base transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed ${btnClass}`}>
+                {gen.isPending
+                  ? <span className="flex items-center justify-center gap-3"><svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>并行生成中...</span>
+                  : '一键生成六类素材'}
+              </button>
+              {gen.isError && <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">生成失败</div>}
             </div>
-            {mode==='parse' && <BriefParsePanel onParsed={(p,m)=>{setBrief(p);setMissing(m);setMode('manual');}} />}
-            {mode==='doc' && <DocumentUploader onParsed={(p,m,_preview)=>{setBrief(p);setMissing(m);setMode('manual');}} />}
-            <MissingFieldsAlert fields={missing} onDismiss={()=>setMissing([])} />
-            <div className="liquid-card p-6"><BriefForm value={brief} onChange={setBrief} /></div>
-            <ImageUploader images={uploadedImages} onChange={setUploadedImages} />
-            <button onClick={()=>gen.mutate()} disabled={!ready||gen.isPending} className={`w-full py-4 rounded-2xl font-semibold text-base transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed ${btnClass}`}>
-              {gen.isPending
-                ? <span className="flex items-center justify-center gap-3"><svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>并行生成中...</span>
-                : '一键生成六类素材'}
-            </button>
-            {gen.isError && <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">生成失败</div>}
-          </div>
 
-          {/* Right: results */}
-          <div className="liquid-card p-6 min-h-[600px]">
-            {result ? (
-            viewMode === 'canvas' ? (
-              <CanvasView
-                mainImage={result.main_image}
-                whiteBg={result.white_bg}
-                sceneImages={result.scene_images}
-                sellingPoints={result.selling_points}
-                videoScripts={result.video_scripts}
-                adMaterial={result.ad_material}
-                brief={brief}
-              />
-            ) : <ResultTabs plan={result} images={images} />
-          ) : (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                <div className="text-5xl mb-5">✨</div>
-                <p className="text-lg mb-2">准备好开始了吗？</p>
-                <p className="text-sm">填写左侧产品资料，点击生成按钮</p>
-              </div>
-            )}
-          </div>
+            {/* Right: results */}
+            <div className="liquid-card p-6 min-h-[600px]">
+              {result ? (
+              viewMode === 'canvas' ? (
+                <CanvasView
+                  mainImage={result.main_image}
+                  whiteBg={result.white_bg}
+                  sceneImages={result.scene_images}
+                  sellingPoints={result.selling_points}
+                  videoScripts={result.video_scripts}
+                  adMaterial={result.ad_material}
+                  brief={brief}
+                />
+              ) : <ResultTabs plan={result} images={images} />
+            ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                  <div className="text-5xl mb-5">✨</div>
+                  <p className="text-lg mb-2">准备好开始了吗？</p>
+                  <p className="text-sm">填写左侧产品资料，点击生成按钮</p>
+                </div>
+              )}
+            </div>
 
-          {/* Copywriting Panel */}
-          {result && <CopywritingPanel brief={brief} />}
-        </div>
+            {/* Copywriting Panel */}
+            {result && <CopywritingPanel brief={brief} />}
+          </div>
+        )}
       </main>
 
       {/* Background orbs */}

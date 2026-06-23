@@ -118,4 +118,13 @@
       inset 0 1px 0 rgba(255,255,255,0.08),
       0 28px 52px rgba(249,115,22,0.1);
   }
+
+  /* --- Fade in animation --- */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fadeIn {
+    animation: fadeIn 0.5s ease-out;
+  }
 }
