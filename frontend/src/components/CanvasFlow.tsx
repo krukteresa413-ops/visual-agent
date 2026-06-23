@@ -14,7 +14,6 @@ import {
   type Node,
   type Viewport,
 } from '@xyflow/react';
-import WorkflowSidebar from './WorkflowSidebar';
 import { api } from '../api/client';
 import { legacyToFlowCanvas, upsertFlowCanvasNode } from '../canvas/canvasAdapters';
 import { useCanvasPersistence } from '../canvas/useCanvasPersistence';
@@ -138,8 +137,12 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   }, [makeEditableRelationEdges, projectId]);
 
   const onConnect = useCallback((connection: Connection) => {
-    setEdges(current => addEdge(connection, current));
-  }, [setEdges]);
+    setEdges(current => {
+      const nextEdges = makeEditableRelationEdges(addEdge(connection, current));
+      void saveCanvas({ nodes: getNodes() as typeof nodes, edges: nextEdges, viewport: getViewport() });
+      return nextEdges;
+    });
+  }, [getNodes, getViewport, makeEditableRelationEdges, saveCanvas, setEdges]);
 
   const saveCurrentCanvas = useCallback(() => {
     return saveCanvas({ nodes, edges, viewport: getViewport() });
@@ -286,7 +289,6 @@ function CanvasFlowInner(props: CanvasFlowProps) {
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <WorkflowSidebar generationProgress={null} />
         <div data-flow-canvas-stage className="relative min-w-0 flex-1 overflow-hidden">
           <div
             data-flow-interactions
@@ -366,7 +368,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
             selectionOnDrag
             multiSelectionKeyCode={['Meta', 'Control', 'Shift']}
             nodesDraggable
-            nodesConnectable={false}
+            nodesConnectable={true}
             elementsSelectable
             className="bg-[#f5f5f5]"
           >
