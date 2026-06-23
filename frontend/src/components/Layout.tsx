@@ -3,9 +3,11 @@
  * Wraps all pages with consistent Dashboard | History links.
  */
 import { Link, useLocation } from 'react-router-dom';
+import ThemeToggle, { useTheme } from './ThemeToggle';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
+  const { isLight, toggle } = useTheme();
 
   const links = [
     { to: '/', label: '首页' },
@@ -37,7 +39,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </div>
-        <span className="text-xs text-gray-600">MOYAG · Agent Canvas</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-600">MOYAG · Agent Canvas</span>
+          <ThemeToggle isLight={isLight} toggle={toggle} />
+        </div>
       </nav>
       )}
       {children}
