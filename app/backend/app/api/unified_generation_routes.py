@@ -1,5 +1,5 @@
 """Unified endpoint: upload document → parse → review → generate all 6 visual types."""
-import os, uuid, time, re, json as _json, asyncio
+import os, uuid, time, re, json as _json, asyncio, logging
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
@@ -11,6 +11,9 @@ from app.services.compliance import ComplianceChecker
 from app.services.visual_agent import VisualAgent
 from app.services.generation_tracker import GenerationTracker
 from app.services.vision_service import vision_service
+from app.services.product_library import upsert_product_brief_for_project
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["unified-generation"])
 
@@ -476,6 +479,18 @@ async def generate_from_document(
             brief = await parse_brief_text(extracted_text)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"AI 解析失败: {str(e)}")
+
+        try:
+            from app.db.session import SessionLocal
+            pdb = SessionLocal()
+            upsert_product_brief_for_project(pdb, project_id, brief)
+            pdb.close()
+        except Exception as e:
+            logger.warning("Product library upsert failed: %s", e)
+            try:
+                pdb.close()
+            except Exception:
+                pass
 
     # Load brand profile memory — project_id first, then brand name fallback
     brand_context = ""

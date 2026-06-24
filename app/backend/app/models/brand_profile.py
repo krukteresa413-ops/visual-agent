@@ -8,6 +8,7 @@ class BrandProfile(Base):
     __tablename__ = 'brand_profiles'
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey('projects.id'), nullable=True, index=True)
+    tenant_id = Column(Integer, index=True, nullable=True)
     name = Column(String(200), nullable=False)
     primary_color = Column(String(20), nullable=True)
     secondary_color = Column(String(20), nullable=True)

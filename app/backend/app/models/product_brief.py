@@ -8,7 +8,8 @@ class ProductBrief(Base):
     __tablename__ = "product_briefs"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
+    tenant_id = Column(Integer, index=True, nullable=True)
 
     product_name = Column(String(255), nullable=False)
     category = Column(String(255), nullable=False)

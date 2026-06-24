@@ -45,6 +45,7 @@ from app.api.vision_routes import router as vision_router
 from app.api.auth_routes import router as auth_router
 from app.api.model_catalog_routes import router as model_catalog_router
 from app.api.skills_routes import router as skills_router
+from app.api.library_routes import router as library_router
 
 
 Base.metadata.create_all(bind=engine)
@@ -81,6 +82,7 @@ app.include_router(copywriting_router)
 app.include_router(layout_router)
 app.include_router(canvas_router)
 app.include_router(asset_library_router)
+app.include_router(library_router)
 app.include_router(campaign_router)
 app.include_router(dashboard_router)
 app.include_router(progress_router)
