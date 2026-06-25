@@ -131,6 +131,12 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   };
 
   const clearUploadedFile = () => setUploadedFile(null);
+  const uploadReferenceImage = async (file: File): Promise<string> => {
+    const form = new FormData();
+    form.append("file", file);
+    const result = await api.upload.image(form);
+    return result?.url || "";
+  };
 
   const runGeneration = async (prompt: string, brief?: object) => {
     const promptWithContext = chatAssetContext?.image_url
@@ -483,6 +489,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
           <BusinessBriefDrawer
             isLight={isLight ?? false}
             onSubmit={(brief) => runGeneration(`${brief.product_name}（商务出图）`, brief)}
+              uploadImage={uploadReferenceImage}
           />
         ) : (
           <div className={`text-sm leading-relaxed rounded-2xl border px-3 py-3 ${bubbleAI}`}>

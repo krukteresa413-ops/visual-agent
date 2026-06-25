@@ -1,19 +1,17 @@
 /**
- * BusinessBriefDrawer — 商务出图抽屉壳（Part 2，v2）
+ * BusinessBriefDrawer — 商务出图抽屉壳（Part 2，v3）
  *
  * 纯展示组件：在右侧 AI 对话列里就地展开，收集结构化商务 brief 字段，
  * 校验必填后通过 onSubmit 吐出一个 plain brief 对象。
- * 不依赖后端类型，不自行发起生成（生成由 AIChatPanel 负责）。
- * 不含资料库自动填（Part 3 再接）。
+ * 上传走注入的 uploadImage(file) → url，不直接依赖 api client。
+ * 生成由 AIChatPanel 负责。不含资料库自动填（Part 3）。
  *
- * v2 变更：
- *  - 必填标记由 · 改为醒目红色 *。
- *  - 删除「商品/品牌名」「核心卖点」的示例占位文本。
- *  - 平台提示去掉「（可改）」。
- *  - 平台改为 内部存 platform_id（taobao/jd/...）、界面显示中文，
- *    对齐后端 platform_specs / platform_prompt_loader 的匹配键。
+ * v3 变更（在 v2 基础上）：
+ *  - 新增「参考图（选填）」上传行：用户传一张产品/参照图，
+ *    经注入的 uploadImage 上传得到 URL，随 brief 带出 reference_image_url。
+ *    （"从画布选图"为后续单独一步，本版不含。）
  *
- * 字段→后端 brief_parser 字段名对齐：
+ * 字段→后端字段名对齐：
  *   上架平台   → upload_platform   (必填，存 platform_id)
  *   商品/品牌名 → product_name      (必填)
  *   核心卖点   → selling_points    (必填)
@@ -21,9 +19,10 @@
  *   风格关键词 → brand_style
  *   禁忌/合规  → compliance_notes
  *   语言/市场  → target_market
+ *   参考图     → reference_image_url（生成时作顶层 reference_image_url 透传）
  * 另带 _mode: 'business' 作为来源标记。
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 export interface BusinessBrief {
   upload_platform: string; // platform_id, e.g. 'taobao'
@@ -33,6 +32,7 @@ export interface BusinessBrief {
   brand_style?: string;
   compliance_notes?: string;
   target_market?: string;
+  reference_image_url?: string;
   _mode: 'business';
 }
 
@@ -40,6 +40,7 @@ interface BusinessBriefDrawerProps {
   isLight: boolean;
   onSubmit: (brief: BusinessBrief) => void;
   onCancel?: () => void;
+  uploadImage?: (file: File) => Promise<string>;
 }
 
 // id 对齐后端 platform_specs / platform_prompt_loader 的匹配键；label 仅用于显示
@@ -53,7 +54,7 @@ const PLATFORMS: { id: string; label: string; hint: string }[] = [
   { id: 'alibaba_intl', label: '阿里国际站', hint: '英文 / 多语 · B2B 详情 · 跨境合规' },
 ];
 
-export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel }: BusinessBriefDrawerProps) {
+export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel, uploadImage }: BusinessBriefDrawerProps) {
   const [platform, setPlatform] = useState(''); // platform_id
   const [productName, setProductName] = useState('');
   const [sellingPoints, setSellingPoints] = useState('');
@@ -61,6 +62,10 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel }: Bus
   const [brandStyle, setBrandStyle] = useState('');
   const [compliance, setCompliance] = useState('');
   const [market, setMarket] = useState('');
+  const [referenceUrl, setReferenceUrl] = useState('');
+  const [refName, setRefName] = useState('');
+  const [refUploading, setRefUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canSubmit =
     platform.trim() !== '' && productName.trim() !== '' && sellingPoints.trim() !== '';
@@ -81,9 +86,35 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel }: Bus
     ? 'bg-indigo-50 text-indigo-600 font-medium border border-indigo-200'
     : 'bg-indigo-500/15 text-indigo-300 font-medium border border-indigo-400/30';
   const hintBox = isLight ? 'bg-gray-50 text-gray-500' : 'bg-white/5 text-gray-400';
+  const dashBox = isLight
+    ? 'border border-dashed border-gray-300 text-gray-400 hover:border-gray-400'
+    : 'border border-dashed border-white/15 text-gray-400 hover:border-white/30';
 
   // 醒目必填标记
   const Req = () => <span className="ml-0.5 text-rose-500 font-bold text-base leading-none">*</span>;
+
+  const handleRefChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !uploadImage) return;
+    setRefUploading(true);
+    try {
+      const url = await uploadImage(file);
+      if (url) {
+        setReferenceUrl(url);
+        setRefName(file.name);
+      }
+    } catch (err) {
+      console.error('reference upload failed', err);
+    } finally {
+      setRefUploading(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const clearReference = () => {
+    setReferenceUrl('');
+    setRefName('');
+  };
 
   const handleStart = () => {
     if (!canSubmit) return;
@@ -95,6 +126,7 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel }: Bus
       brand_style: brandStyle.trim() || undefined,
       compliance_notes: compliance.trim() || undefined,
       target_market: market.trim() || undefined,
+      reference_image_url: referenceUrl || undefined,
       _mode: 'business',
     });
   };
@@ -155,40 +187,42 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel }: Bus
       <div className="grid grid-cols-2 gap-3">
         <div>
           <div className={`mb-1.5 ${labelMuted}`}>目标受众</div>
-          <input
-            className={field}
-            value={targetCustomer}
-            onChange={(e) => setTargetCustomer(e.target.value)}
-            placeholder="选填"
-          />
+          <input className={field} value={targetCustomer} onChange={(e) => setTargetCustomer(e.target.value)} placeholder="选填" />
         </div>
         <div>
           <div className={`mb-1.5 ${labelMuted}`}>风格关键词</div>
-          <input
-            className={field}
-            value={brandStyle}
-            onChange={(e) => setBrandStyle(e.target.value)}
-            placeholder="选填"
-          />
+          <input className={field} value={brandStyle} onChange={(e) => setBrandStyle(e.target.value)} placeholder="选填" />
         </div>
         <div>
           <div className={`mb-1.5 ${labelMuted}`}>禁忌 / 合规</div>
-          <input
-            className={field}
-            value={compliance}
-            onChange={(e) => setCompliance(e.target.value)}
-            placeholder="选填"
-          />
+          <input className={field} value={compliance} onChange={(e) => setCompliance(e.target.value)} placeholder="选填" />
         </div>
         <div>
           <div className={`mb-1.5 ${labelMuted}`}>语言 / 市场</div>
-          <input
-            className={field}
-            value={market}
-            onChange={(e) => setMarket(e.target.value)}
-            placeholder="中文 · 选填"
-          />
+          <input className={field} value={market} onChange={(e) => setMarket(e.target.value)} placeholder="中文 · 选填" />
         </div>
+      </div>
+
+      {/* 参考图（选填） */}
+      <div>
+        <div className={`mb-1.5 ${labelMuted}`}>参考图（选填）</div>
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleRefChange} />
+        {referenceUrl ? (
+          <div className={`flex items-center gap-2 rounded-lg px-3 py-2 ${hintBox}`}>
+            <img src={referenceUrl} alt="" className="h-8 w-8 rounded object-cover" />
+            <span className="max-w-[150px] truncate text-xs">{refName}</span>
+            <button type="button" onClick={clearReference} className="ml-auto text-xs text-gray-500 hover:text-rose-400" aria-label="移除参考图">✕</button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={refUploading || !uploadImage}
+            className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs ${dashBox} disabled:opacity-50`}
+          >
+            {refUploading ? '上传中…' : '＋ 上传产品 / 参照图'}
+          </button>
+        )}
       </div>
 
       {/* 操作区 */}
