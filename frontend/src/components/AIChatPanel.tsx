@@ -178,10 +178,14 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
       } as Parameters<typeof api.generation.quickGenerate>[0] & { agent_mode: AgentMode });
       onTaskStarted?.(task.task_id);
 
+      let finished = false;
       const poll = window.setInterval(async () => {
         try {
+          if (finished) return;
           const latest = await api.generation.pollTask(task.task_id);
+          if (finished) return;
           if (latest.status === 'complete') {
+            finished = true;
             window.clearInterval(poll);
             setCurrentPercent(100);
             setIsStreaming(false);
@@ -196,6 +200,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
             }]);
             onGenerationComplete?.(latest.generation);
           } else if (latest.status === 'error') {
+            finished = true;
             window.clearInterval(poll);
             setIsStreaming(false);
             dispatch({ type: 'assistantStatus', step: '出错', content: latest.error || '生成失败', status: 'error', percent: 0 });

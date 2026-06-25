@@ -299,6 +299,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
           >
             drag {interactionStats.drags} / move {interactionStats.moves} / multi {interactionStats.selections}
           </div>
+          {false && (
           <div
             data-ai-companion
             data-selected-count={selectionContext.length}
@@ -346,6 +347,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
               {actionError || actionProgress}
             </div>
           </div>
+          )}
           {selectedActionAnchor && <ImageActionBar left={selectedActionAnchor.left} top={selectedActionAnchor.top} />}
           <ReactFlow
             nodes={nodes}
@@ -373,8 +375,8 @@ function CanvasFlowInner(props: CanvasFlowProps) {
             className="bg-[#f5f5f5]"
           >
             <Background gap={32} size={1} color="rgba(0,0,0,0.08)" />
-            <Controls position="bottom-left" showInteractive={false} />
-            <MiniMap position="bottom-right" pannable zoomable nodeStrokeWidth={2} />
+            <Controls position="bottom-right" showInteractive={false} />
+            <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} />
           </ReactFlow>
         </div>
       </div>
