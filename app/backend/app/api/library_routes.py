@@ -82,6 +82,8 @@ def get_brand(db: DbDep, tenant_id: Annotated[int | None, Query()] = None) -> di
     query = db.query(BrandProfile)
     if resolved_tenant_id is not None:
         query = query.filter(BrandProfile.tenant_id == resolved_tenant_id)
+    query = query.filter(BrandProfile.is_canonical == True)
+
     row = query.order_by(BrandProfile.updated_at.desc()).first()
     if row is None:
         return {}

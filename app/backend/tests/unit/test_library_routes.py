@@ -79,6 +79,7 @@ def seed_library(db):
             secondary_color="#eeeeee",
             accent_color="#ff6900",
             tone_of_voice="专业可信",
+            is_canonical=True,
             forbidden_words=json.dumps(["廉价"], ensure_ascii=False),
         )
     )
