@@ -38,7 +38,7 @@ export default function SkillsPopup({ isLight, onClose, onSelectSkill, anchorEl 
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  // Position popover below anchor
+  // Position popover below anchor; without anchor it is embedded by the caller.
   useEffect(() => {
     if (anchorEl) {
       const rect = anchorEl.getBoundingClientRect();
@@ -62,14 +62,16 @@ export default function SkillsPopup({ isLight, onClose, onSelectSkill, anchorEl 
   const displayCategories = categories.length > 0 ? categories : ['Video', 'Social Media', 'E-Commerce', 'Branding'];
 
   const bg = isLight ? 'bg-white' : 'bg-gray-900';
+  const placementClass = anchorEl ? 'fixed z-[100] w-[280px]' : 'relative z-30 w-full';
+  const placementStyle = anchorEl ? { top: position.top, left: position.left } : undefined;
   const textColor = isLight ? 'text-gray-900' : 'text-white';
   const subText = isLight ? 'text-gray-500' : 'text-gray-400';
 
   return (
     <div
       ref={popupRef}
-      className={`fixed z-[100] ${bg} rounded-xl shadow-2xl border border-black/10 w-[280px] max-h-[420px] flex flex-col overflow-hidden`}
-      style={{ top: position.top, left: position.left }}
+      className={`${placementClass} ${bg} rounded-xl shadow-2xl border border-black/10 max-h-[420px] flex flex-col overflow-hidden`}
+      style={placementStyle}
     >
       {/* Category chips */}
       <div className="px-3 pt-3 pb-2 overflow-x-auto">

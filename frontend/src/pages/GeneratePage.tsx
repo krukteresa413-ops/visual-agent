@@ -303,22 +303,6 @@ export default function GeneratePage() {
       ) : isFullCanvas ? (
         /* ── Full-screen canvas layout ── */
         <main className="flex h-[calc(100vh-44px)] overflow-hidden">
-          {/* Collapsed sidebar strip */}
-          <div className="w-14 flex-shrink-0 border-r border-white/5 bg-black/10 flex flex-col items-center py-3 gap-3">
-            <button data-brief-panel-trigger onClick={() => setPanelOpen(true)}
-              className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-gray-400 hover:text-gray-200 transition-all"
-              title="打开产品资料">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-            <div className="text-[9px] text-gray-600 text-center leading-tight w-12 truncate"
-              title={brief.product_name}>{brief.product_name?.slice(0, 4) || '产品'}</div>
-            <button onClick={() => setViewMode('tabs')}
-              className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-500 hover:text-gray-300 transition-all text-[10px]"
-              title="标签视图">📋</button>
-            <button onClick={() => setModelPanelOpen(o => !o)}
-              className="w-9 h-9 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 flex items-center justify-center text-orange-400 transition-all text-[10px]"
-              title="模型偏好">⚙️</button>
-          </div>
           {/* Canvas fills remaining space */}
           <div
             className={`flex-1 overflow-hidden relative ${isDragOver ? 'ring-2 ring-purple-500 ring-inset' : ''}`}

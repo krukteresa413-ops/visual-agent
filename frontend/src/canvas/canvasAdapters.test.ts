@@ -118,4 +118,58 @@ describe('canvas React Flow adapters', () => {
     expect(next[0].position).toEqual({ x: 20, y: 30 });
     expect(next[0].data.legacy_id).toBe('generated-main');
   });
+
+  it('preserves generated image nodes (thumbnail + asset_ref) through Legacy→Flow conversion', () => {
+    const state: LegacyCanvasState = {
+      elements: [
+        {
+          id: 'gen-img-1',
+          type: 'image',
+          label: '生成主图',
+          x: 0,
+          y: 0,
+          width: 512,
+          height: 512,
+          thumbnail_url: '/uploads/generated/abc.png',
+          asset_ref: { asset_id: 101, asset_type: 'key_visual' },
+          metadata: { source: 'generation' },
+        },
+      ],
+      connections: [],
+      viewport: { x: 0, y: 0, scale: 1 },
+    };
+    const flow = legacyToFlowCanvas(state);
+
+    expect(flow.nodes).toHaveLength(1);
+    expect(flow.nodes[0].data.thumbnail_url).toBe('/uploads/generated/abc.png');
+    expect(flow.nodes[0].data.asset_ref).toEqual({ asset_id: 101, asset_type: 'key_visual' });
+    expect(flowToLegacyCanvas(flow).elements[0]).toMatchObject(state.elements[0]);
+  });
+
+
+  it('preserves connection metadata through Legacy→Flow conversion', () => {
+    const state: LegacyCanvasState = {
+      elements: [
+        { id: 'source', type: 'image', label: '源图', x: 0, y: 0, width: 100, height: 100 },
+        { id: 'variant', type: 'image', label: '变体', x: 120, y: 0, width: 100, height: 100 },
+      ],
+      connections: [
+        {
+          id: 'edge-instruction',
+          source_id: 'source',
+          target_id: 'variant',
+          label: '换蓝色背景',
+          relation_type: 'variant_of',
+          metadata: { instruction: '换蓝色背景' },
+        },
+      ],
+      viewport: { x: 0, y: 0, scale: 1 },
+    };
+    const flow = legacyToFlowCanvas(state);
+
+    expect(flow.edges[0].data.relation_type).toBe('variant_of');
+    expect(flow.edges[0].data.metadata).toEqual({ instruction: '换蓝色背景' });
+    expect(flowToLegacyCanvas(flow).connections[0]).toMatchObject(state.connections[0]);
+  });
+
 });

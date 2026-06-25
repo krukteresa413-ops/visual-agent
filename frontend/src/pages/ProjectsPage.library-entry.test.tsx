@@ -15,7 +15,7 @@ const inspirationPanel = fs.existsSync(path.join(componentsRoot, 'InspirationPan
 
 describe('homepage library information architecture', () => {
   it('renames the former brand diamond to the library entry without changing the other diamonds', () => {
-    expect(projectsPage).toContain("{ title: '资料库', desc: '品牌·产品·灵感', icon: '📚', action: 'library' }");
+    expect(projectsPage).toContain("{ title: '资料库', desc: '品牌与产品资产', icon: '📚', action: 'library' }");
     expect(projectsPage).toContain("{ title: '灵感库', desc: '创意灵感', icon: '💡', action: 'inspiration' }");
     expect(projectsPage).toContain("{ title: '个人中心', desc: '账户与积分', icon: '👤', action: 'profile' }");
     expect(projectsPage).toContain("{ title: '项目库', desc: '项目陈列柜', icon: '📁', action: 'projects' }");

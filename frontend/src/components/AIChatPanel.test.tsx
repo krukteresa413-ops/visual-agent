@@ -14,7 +14,7 @@ describe('AIChatPanel LS2 composer contract', () => {
     expect(source).toContain('handleSubmit()');
   });
 
-  it('renders the six composer tool positions without pretending disabled tools work', () => {
+  it('renders the six composer tool positions', () => {
     for (const marker of [
       'data-composer-tool="upload"',
       'data-composer-tool="library"',
@@ -34,6 +34,29 @@ describe('AIChatPanel LS2 composer contract', () => {
     expect(source).toContain('data-composer-model-panel');
   });
 
+  it('has library tool with onSkillsOpen and inspiration still disabled (Part 2)', () => {
+    // library icon opens Skills popup
+    expect(source).toContain('data-composer-tool="library"');
+    expect(source).toContain('onClick={onSkillsOpen}');
+    expect(source).toContain('title="素材库"');
+    // inspiration/lightbulb still disabled (Part 2 preserves old state)
+    expect(source).toContain('data-composer-tool="inspiration"');
+    expect(source).toContain('disabled');
+  });
+
+  it('keeps SkillsPopup anchored width isolated', () => {
+    const skillsPopup = fs.readFileSync(path.resolve(__dirname, 'SkillsPopup.tsx'), 'utf8');
+    expect(skillsPopup).toContain("anchorEl ? 'fixed z-[100] w-[280px]' : 'relative z-30 w-full'");
+    expect(skillsPopup).not.toContain('border border-black/10 w-full max-h');
+  });
+
+  it('has business mode toggle and runGeneration wired (Part 2)', () => {
+    expect(source).toContain("'quick' | 'business'");
+    expect(source).toContain('setGenMode');
+    expect(source).toContain('runGeneration');
+    expect(source).toContain('uploadReferenceImage');
+  });
+
   it('keeps existing agent mode switching behavior', () => {
     expect(source).toContain("type AgentMode = 'agent' | 'image-gen' | 'video-gen'");
     expect(source).toContain('setAgentMode(mode.id as AgentMode)');
@@ -44,6 +67,7 @@ describe('AIChatPanel LS2 composer contract', () => {
     expect(generatePage).toContain('absolute right-0 top-0 bottom-0');
     expect(generatePage).toContain('w-[399px]');
   });
+
   it('routes existing SSE events through adapter and chatReducer while keeping polling fallback', () => {
     expect(source).toContain('useReducer');
     expect(source).toContain('chatReducer');
@@ -52,5 +76,4 @@ describe('AIChatPanel LS2 composer contract', () => {
     expect(source).toContain('startPolling()');
     expect(source).toContain('api.progress.streamUrl(taskId)');
   });
-
 });

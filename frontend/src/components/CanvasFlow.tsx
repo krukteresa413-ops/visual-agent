@@ -72,7 +72,6 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   const [initialViewport, setInitialViewport] = useState(emptyFlow.viewport);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [interactionStats, setInteractionStats] = useState({ drags: 0, moves: 0, selections: 0 });
   const [selectionContext, setSelectionContext] = useState<SelectionContextItem[]>([]);
   const [selectedActionNode, setSelectedActionNode] = useState<Node | null>(null);
   const [actionInstruction, setActionInstruction] = useState('');
@@ -98,6 +97,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
     data: {
       ...edge.data,
       label: typeof edge.label === 'string' ? edge.label : typeof edge.data?.label === 'string' ? edge.data.label : undefined,
+      instruction: typeof edge.data?.instruction === 'string' ? edge.data.instruction : typeof edge.data?.metadata === 'object' && edge.data.metadata && 'instruction' in edge.data.metadata ? String(edge.data.metadata.instruction) : undefined,
       onLabelCommit: onRelationLabelCommit,
     },
   })) as typeof edges, [onRelationLabelCommit]);
@@ -149,22 +149,17 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   }, [edges, getViewport, nodes, saveCanvas]);
 
   const noteDragStop = useCallback(() => {
-    setInteractionStats(current => ({ ...current, drags: current.drags + 1 }));
-    void saveCanvas({ nodes: getNodes() as typeof nodes, edges, viewport: getViewport() });
+void saveCanvas({ nodes: getNodes() as typeof nodes, edges, viewport: getViewport() });
   }, [edges, getNodes, getViewport, nodes, saveCanvas]);
 
   const noteMoveEnd = useCallback((_: unknown, viewport: Viewport) => {
-    setInteractionStats(current => ({ ...current, moves: current.moves + 1 }));
-    void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
+void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
   }, [edges, getViewport, nodes, saveCanvas]);
 
   const noteSelectionChange = useCallback(({ nodes: selectedNodes }: { nodes: Node[] }) => {
     const nextContext = buildSelectionContext(selectedNodes as typeof nodes);
     setSelectionContext(nextContext);
     setSelectedActionNode(selectedNodes.length === 1 ? selectedNodes[0] : null);
-    if (selectedNodes.length > 1) {
-      setInteractionStats(current => ({ ...current, selections: current.selections + 1 }));
-    }
   }, [nodes]);
 
 
@@ -290,15 +285,6 @@ function CanvasFlowInner(props: CanvasFlowProps) {
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div data-flow-canvas-stage className="relative min-w-0 flex-1 overflow-hidden">
-          <div
-            data-flow-interactions
-            data-drag-count={interactionStats.drags}
-            data-move-count={interactionStats.moves}
-            data-selection-count={interactionStats.selections}
-            className="pointer-events-none absolute left-3 bottom-3 z-10 rounded bg-white/85 px-2 py-1 text-[10px] text-gray-500 shadow-sm"
-          >
-            drag {interactionStats.drags} / move {interactionStats.moves} / multi {interactionStats.selections}
-          </div>
           {false && (
           <div
             data-ai-companion

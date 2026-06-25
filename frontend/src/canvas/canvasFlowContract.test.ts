@@ -128,4 +128,27 @@ describe('S3 React Flow canvas contract', () => {
     expect(editableEdge).toContain('onLabelCommit');
   });
 
+
+  it('AssetNode renders generated video nodes with native video controls', () => {
+    const assetNode = read('components/nodes/AssetNode.tsx');
+
+    expect(assetNode).toContain("node.type === 'video'");
+    expect(assetNode).toContain('<video');
+    expect(assetNode).toContain('controls');
+    expect(assetNode).toContain('data-flow-video-node');
+  });
+
+
+  it('CanvasFlow passes selected source imageUrl to canvas actions and displays instruction-labeled lineage', () => {
+    const selection = read('canvas/selectionContext.ts');
+    const flow = read('components/CanvasFlow.tsx');
+    const editableEdge = read('components/canvas/EditableRelationEdge.tsx');
+
+    expect(selection).toContain('imageUrl?: string');
+    expect(selection).toContain('imageUrl: extractImageUrl(node.data)');
+    expect(flow).toContain('data.instruction');
+    expect(editableEdge).toContain('instruction?: string');
+    expect(editableEdge).toContain('relationData.instruction');
+  });
+
 });

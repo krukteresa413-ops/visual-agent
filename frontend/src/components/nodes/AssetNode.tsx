@@ -24,7 +24,9 @@ function AssetNode({ data, selected }: NodeProps) {
         <span className="ml-2 shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[9px] uppercase tracking-normal text-gray-500">{type}</span>
       </div>
       <div className="flex items-center justify-center bg-gray-50" style={{ minHeight: Math.max(48, node.height - 32) }}>
-        {thumbnail ? (
+        {thumbnail && node.type === 'video' ? (
+          <video data-flow-video-node src={thumbnail} controls className="h-full w-full bg-black object-cover" />
+        ) : thumbnail ? (
           <img src={thumbnail} alt="" draggable={false} className="h-full w-full object-cover" />
         ) : (
           <div className="px-4 text-center text-xs text-gray-400">{label}</div>

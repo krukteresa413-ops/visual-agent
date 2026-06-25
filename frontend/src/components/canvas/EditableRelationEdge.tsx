@@ -4,6 +4,7 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps } from '@xyf
 type EditableRelationData = {
   label?: string;
   relation_type?: string;
+  instruction?: string;
   onLabelCommit?: (edgeId: string, label: string) => void;
 };
 
@@ -20,7 +21,7 @@ export default function EditableRelationEdge({
   data,
 }: EdgeProps) {
   const relationData = (data || {}) as EditableRelationData;
-  const initialLabel = String(relationData.label || label || relationData.relation_type || 'variant_of');
+  const initialLabel = String(relationData.label || label || relationData.instruction || relationData.relation_type || 'variant_of');
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(initialLabel);
   const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
@@ -38,7 +39,7 @@ export default function EditableRelationEdge({
       <EdgeLabelRenderer>
         <div
           data-editable-relation-edge
-          className="nodrag nopan absolute max-w-[260px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-orange-200 bg-white/95 px-2 py-1 text-[10px] text-orange-700 shadow-sm backdrop-blur"
+          className="nodrag nopan pointer-events-auto absolute max-w-[260px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-orange-200 bg-white/95 px-2 py-1 text-[10px] text-orange-700 shadow-sm backdrop-blur"
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
           title={draft}
           onDoubleClick={() => setEditing(true)}

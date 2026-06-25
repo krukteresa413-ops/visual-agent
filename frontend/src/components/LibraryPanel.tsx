@@ -20,37 +20,6 @@ const SECTIONS: Array<{ key: LibrarySection; title: string; desc: string; icon: 
 export default function LibraryPanel({ projectId, hasUploadedPdf, pdfText, onClose }: Props) {
   const [activeSection, setActiveSection] = useState<LibrarySection | null>(null);
 
-  if (activeSection === 'brand') {
-    return (
-      <div data-library-panel data-library-section="brand-assets">
-        <div className="fixed left-1/2 top-[5vh] z-[60] w-full max-w-[760px] -translate-x-1/2 px-4 pointer-events-none">
-          <div className="pointer-events-auto mb-2 rounded-[28px] border border-white/[0.14] bg-black/60 px-4 py-3 text-white shadow-[0_30px_100px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.2em] text-orange-300/80">Library Gallery</p>
-                <h2 className="text-lg font-semibold">品牌资产</h2>
-                <p className="text-xs text-gray-400">原品牌功能已内置在资料库，用于维护 Logo、色板、字体与关键词。</p>
-              </div>
-              <div className="flex gap-1 rounded-xl bg-white/5 p-1">
-                <button onClick={() => setActiveSection(null)} className="rounded-lg px-2.5 py-1.5 text-[11px] text-gray-400 hover:bg-white/10 hover:text-white">返回陈列柜</button>
-                {SECTIONS.map(section => (
-                  <button
-                    key={section.key}
-                    onClick={() => setActiveSection(section.key)}
-                    className={`rounded-lg px-2.5 py-1.5 text-[11px] transition-colors ${activeSection === section.key ? 'bg-orange-500 text-white' : 'text-gray-400 hover:text-white hover:bg-white/10'}`}
-                  >
-                    {section.icon} {section.title}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-        <BrandKitPanel projectId={projectId} hasUploadedPdf={hasUploadedPdf} pdfText={pdfText} onClose={onClose} />
-      </div>
-    );
-  }
-
   const activeMeta = activeSection ? SECTIONS.find(item => item.key === activeSection) : null;
 
   return (
@@ -88,6 +57,16 @@ export default function LibraryPanel({ projectId, hasUploadedPdf, pdfText, onClo
             </button>
           ))}
         </div>
+
+        {activeSection === 'brand' && (
+          <BrandKitPanel
+            projectId={projectId}
+            hasUploadedPdf={hasUploadedPdf}
+            pdfText={pdfText}
+            onClose={() => setActiveSection(null)}
+            embedded
+          />
+        )}
 
         {activeMeta && activeMeta.key !== 'brand' && (
           <div className="mt-4 rounded-3xl border border-dashed border-white/[0.14] bg-white/[0.04] px-6 py-10 text-center">

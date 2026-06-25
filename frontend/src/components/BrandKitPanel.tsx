@@ -21,6 +21,9 @@ interface Props {
   hasUploadedPdf: boolean;
   pdfText?: string;
   onClose: () => void;
+  /** When true, render inline inside a host container (e.g. the library gallery)
+   *  instead of as a fixed full-screen dark modal. */
+  embedded?: boolean;
 }
 
 interface SectionState {
@@ -49,7 +52,7 @@ const CARD_DEFS: { key: SectionKey; label: string; icon: string }[] = [
   { key: 'brandGuide', label: '品牌指南', icon: '📖' },
 ];
 
-export default function BrandKitPanel({ projectId, onClose }: Props) {
+export default function BrandKitPanel({ projectId, onClose, embedded = false }: Props) {
   const [kit, setKit] = useState<BrandKitData | null>(null);
   const [loading, setLoading] = useState(true);
   const [extracting, setExtracting] = useState(false);
@@ -472,33 +475,28 @@ export default function BrandKitPanel({ projectId, onClose }: Props) {
   // ── Main render ─────────────────────────────────────────────
 
   if (loading) {
+    const spinner = (
+      <div className="animate-spin w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full" />
+    );
+    if (embedded) {
+      return <div className="flex items-center justify-center py-16">{spinner}</div>;
+    }
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md" onClick={onClose}>
-        <div className="animate-spin w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full" />
+        {spinner}
       </div>
     );
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-fadeIn" onClick={onClose}>
-      <div
-        className="liquid-card backdrop-blur-2xl bg-gradient-to-br from-[#111122] via-[#151528] to-[#0d1122]
-          border border-white/[0.10] p-6 w-full max-w-[640px] mx-4 max-h-[90vh] overflow-y-auto rounded-2xl
-          shadow-[0_0_80px_rgba(0,0,0,0.6),inset_0_1px_0_0_rgba(255,255,255,0.06)]"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Close button */}
-        <button onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white text-sm transition-all flex items-center justify-center z-10"
-        >✕</button>
+  const innerContent = (
+    <>
+      {/* Header */}
+      <div className="text-center mb-4">
+        <h2 className="text-xl font-bold text-white tracking-tight">开始使用你的品牌资产</h2>
+        <p className="text-[13px] text-gray-400 mt-1.5">添加 Logo、颜色、字体等，保持品牌一致性。</p>
+      </div>
 
-        {/* Header */}
-        <div className="text-center mb-4">
-          <h2 className="text-xl font-bold text-white tracking-tight">开始使用你的品牌资产</h2>
-          <p className="text-[13px] text-gray-400 mt-1.5">添加 Logo、颜色、字体等，保持品牌一致性。</p>
-        </div>
-
-        {extracting ? (
+      {extracting ? (
           <div className="flex flex-col items-center py-16 gap-4">
             <div className="relative">
               <div className="w-14 h-14 rounded-2xl bg-orange-500/20 animate-pulse" />
@@ -559,6 +557,32 @@ export default function BrandKitPanel({ projectId, onClose }: Props) {
             </button>
           </>
         )}
+    </>
+  );
+
+  // Inline / embedded shell — sits inside the host (light gallery), no dark overlay.
+  if (embedded) {
+    return (
+      <div className="animate-fadeIn rounded-3xl border border-white/[0.12] bg-white/[0.04] p-5">
+        {innerContent}
+      </div>
+    );
+  }
+
+  // Standalone modal shell — original full-screen behaviour (used by BrandPage).
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-fadeIn" onClick={onClose}>
+      <div
+        className="liquid-card backdrop-blur-2xl bg-gradient-to-br from-[#111122] via-[#151528] to-[#0d1122]
+          border border-white/[0.10] p-6 w-full max-w-[640px] mx-4 max-h-[90vh] overflow-y-auto rounded-2xl
+          shadow-[0_0_80px_rgba(0,0,0,0.6),inset_0_1px_0_0_rgba(255,255,255,0.06)]"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-400 hover:text-white text-sm transition-all flex items-center justify-center z-10"
+        >✕</button>
+        {innerContent}
       </div>
     </div>
   );

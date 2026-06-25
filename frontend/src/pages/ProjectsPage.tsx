@@ -15,7 +15,7 @@ import { api } from '../api/client';
 
 const DIAMONDS = [
   { title: '灵感库', desc: '创意灵感', icon: '💡', action: 'inspiration' },
-  { title: '资料库', desc: '品牌·产品·灵感', icon: '📚', action: 'library' },
+  { title: '资料库', desc: '品牌与产品资产', icon: '📚', action: 'library' },
   { title: '个人中心', desc: '账户与积分', icon: '👤', action: 'profile' },
   { title: '项目库', desc: '项目陈列柜', icon: '📁', action: 'projects' },
 ];
