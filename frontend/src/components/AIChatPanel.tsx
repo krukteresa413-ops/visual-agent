@@ -174,7 +174,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         auto_model: autoModel,
         agent_mode: agentMode,
         brief,
-        reference_image_url: refUrl,
+        reference_image_url: ((brief as any)?.reference_image_url as string | undefined) ?? refUrl,
       } as Parameters<typeof api.generation.quickGenerate>[0] & { agent_mode: AgentMode });
       onTaskStarted?.(task.task_id);
 
