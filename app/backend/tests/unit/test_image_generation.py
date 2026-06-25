@@ -202,7 +202,7 @@ class TestDataEyesAIProvider:
         mock_post.return_value.json.return_value = {"created": 123, "data": [{"b64_json": b64}]}
 
         provider = DataEyesAIImageProvider(api_key="test-key", base_url="https://cloud.dataeyes.ai/v1")
-        await provider.generate(ImageGenerationRequest(provider="dataeyes", prompt="red shoe"))
+        await provider.generate(ImageGenerationRequest(provider="dataeyes", model="gpt-image-1-sp", prompt="red shoe"))
 
         payload = mock_post.call_args.kwargs["json"]
         assert payload["model"] == "gpt-image-1-sp"

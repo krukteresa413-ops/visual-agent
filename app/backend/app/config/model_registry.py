@@ -21,7 +21,7 @@ CATALOG_MODELS = [
             "format": "openai",
             "params": ["size", "n"],
             "enabled": True,
-            "tags": ["主图", "兜底"],
+            "tags": ["GPT变体", "已验证"],
         },
         {
             "id": "gpt-image-1.5",
@@ -148,7 +148,7 @@ CATALOG_MODELS = [
             "format": "nanobanana_openai",
             "params": ["n"],
             "enabled": True,
-            "tags": ["高速", "低价", "4K"],
+            "tags": ["主图", "兜底", "高速"],
         },
         {
             "id": "gemini-3-pro-image-preview",

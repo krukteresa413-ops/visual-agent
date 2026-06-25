@@ -662,7 +662,7 @@ class DataEyesAIImageProvider(ImageGenerationProvider):
 
     async def generate(self, request: ImageGenerationRequest) -> ImageGenerationResult:
         client = self._get_client()
-        model = request.model or "gpt-image-1-sp"
+        model = request.model or "gemini-2.5-flash-image"
 
         # ── Format dispatch (Fix 2B) ──
         model_meta = self.MODEL_REGISTRY.get(model, {})
@@ -684,8 +684,16 @@ class DataEyesAIImageProvider(ImageGenerationProvider):
         if model not in _nosize_models:
             payload["size"] = size
 
-        resp = await client.post("/images/generations", json=payload)
-        if resp.status_code >= 400:
+        # Retry on intermittent DataEyes routing bug (tool_choice 400)
+        _TOOL_CHOICE_400_SIG = "Tool choice 'image_generation' not found in 'tools'"
+        _MAX_RETRIES = 5
+        for _attempt in range(_MAX_RETRIES + 1):
+            resp = await client.post("/images/generations", json=payload)
+            if resp.status_code == 200:
+                break
+            if resp.status_code == 400 and _TOOL_CHOICE_400_SIG in resp.text and _attempt < _MAX_RETRIES:
+                await asyncio.sleep(0.3 * (_attempt + 1))
+                continue
             raise HTTPException(
                 status_code=502,
                 detail=f"DataEyesAI image error ({resp.status_code}): {resp.text[:300]}",
