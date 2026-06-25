@@ -27,6 +27,7 @@ interface CanvasViewProps {
   qualityReport?: any;
   onAddToChat?: (asset: CanvasChatAsset) => void;
   onEditPrompt?: (prompt: string) => void;
+  canvasRefreshNonce?: number;
 }
 
 interface CanvasElement {

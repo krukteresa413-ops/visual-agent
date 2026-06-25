@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   Controls,
@@ -135,6 +135,31 @@ function CanvasFlowInner(props: CanvasFlowProps) {
 
     return () => { cancelled = true; };
   }, [makeEditableRelationEdges, projectId]);
+
+  //  on refresh nonce, re-fetch canvas state and merge new nodes
+  const initialCanvasNonceRef = useRef(true);
+  const canvasRefreshNonce = props.canvasRefreshNonce;
+  useEffect(() => {
+    if (initialCanvasNonceRef.current) {
+      initialCanvasNonceRef.current = false;
+      return;
+    }
+    if (!canvasRefreshNonce) return;
+    let cancelled = false;
+    api.atelierCanvas.getState(projectId).then(data => {
+      if (cancelled || !data?.elements?.length) return;
+      setNodes(current => {
+        const existingIds = new Set(current.map(node => String(node.data?.legacy_id || node.id)));
+        let next = current;
+        for (const element of data.elements) {
+          if (existingIds.has(String(element.id))) continue;
+          next = upsertFlowCanvasNode(next, element) as typeof current;
+        }
+        return next;
+      });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [canvasRefreshNonce, projectId, setNodes]);
 
   const onConnect = useCallback((connection: Connection) => {
     setEdges(current => {

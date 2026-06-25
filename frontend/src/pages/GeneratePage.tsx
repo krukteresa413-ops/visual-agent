@@ -41,6 +41,7 @@ export default function GeneratePage() {
   const [rightPanel, setRightPanel] = useState<'chat' | 'brand' | null>('chat');  // 默认展开AI对话  // right side panel
   const [chatAssetContext, setChatAssetContext] = useState<ChatAssetContext | null>(null);
   const [genTaskId, setGenTaskId] = useState<string | null>(null);
+  const [canvasRefreshNonce, setCanvasRefreshNonce] = useState(0);
   const [showSkills, setShowSkills] = useState(false);
   const skillButtonRef = useRef<HTMLButtonElement>(null);
   const [pendingSkillPrompt, setPendingSkillPrompt] = useState<string | null>(null);
@@ -429,6 +430,7 @@ export default function GeneratePage() {
                       }}
                       onGenerationComplete={(generation) => {
                         setResult(generation as VisualAssetPlan);
+                        setCanvasRefreshNonce(n => n + 1);
                         setGenTaskId(null);
                         setIsGenerating(false);
                         setViewMode('canvas');
@@ -456,6 +458,7 @@ export default function GeneratePage() {
               <CanvasView
                 isLight={isLight}
                 projectId={pid}
+                canvasRefreshNonce={canvasRefreshNonce}
                 generationTaskId={genTaskId}
                 qualityReport={qualityReport}
                 onAddToChat={addCanvasAssetToChat}
@@ -489,6 +492,7 @@ export default function GeneratePage() {
               sellingPoints={result?.selling_points}
               videoScripts={result?.video_scripts}
               projectId={pid}
+              canvasRefreshNonce={canvasRefreshNonce}
               generationTaskId={genTaskId}
               qualityReport={qualityReport}
               onAddToChat={addCanvasAssetToChat}
@@ -594,6 +598,7 @@ export default function GeneratePage() {
                   sellingPoints={result?.selling_points}
                   videoScripts={result?.video_scripts}
                   projectId={pid}
+                  canvasRefreshNonce={canvasRefreshNonce}
                   onAddToChat={addCanvasAssetToChat}
                   onEditPrompt={editPromptFromHistory}
                   adMaterial={result?.ad_material}
