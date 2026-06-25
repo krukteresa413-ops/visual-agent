@@ -490,6 +490,9 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
             isLight={isLight ?? false}
             onSubmit={(brief) => runGeneration(`${brief.product_name}（商务出图）`, brief)}
               uploadImage={uploadReferenceImage}
+              fetchBrand={() => api.library.brand()}
+              fetchProducts={() => api.library.products()}
+              fetchProductDetail={(id) => api.library.product(id)}
           />
         ) : (
           <div className={`text-sm leading-relaxed rounded-2xl border px-3 py-3 ${bubbleAI}`}>

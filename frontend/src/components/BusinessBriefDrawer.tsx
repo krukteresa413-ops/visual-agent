@@ -1,31 +1,18 @@
 /**
- * BusinessBriefDrawer — 商务出图抽屉壳（Part 2，v3）
+ * BusinessBriefDrawer — 商务出图抽屉（Part 3b，v4：资料库自动填）
  *
- * 纯展示组件：在右侧 AI 对话列里就地展开，收集结构化商务 brief 字段，
- * 校验必填后通过 onSubmit 吐出一个 plain brief 对象。
- * 上传走注入的 uploadImage(file) → url，不直接依赖 api client。
- * 生成由 AIChatPanel 负责。不含资料库自动填（Part 3）。
+ * 纯展示 + 注入式取数：开抽屉拉 canonical 公司(静默填公司级)+ 商品列表(选择器)，
+ * 选中商品拉详情填商品级；「新建商品」清商品级、留公司级。
+ * 取数/上传均由注入函数完成，组件不直接依赖 api client。
+ * 字段可改；自动填的字段标「来自资料库」，用户一改该标即消失。
  *
- * v3 变更（在 v2 基础上）：
- *  - 新增「参考图（选填）」上传行：用户传一张产品/参照图，
- *    经注入的 uploadImage 上传得到 URL，随 brief 带出 reference_image_url。
- *    （"从画布选图"为后续单独一步，本版不含。）
- *
- * 字段→后端字段名对齐：
- *   上架平台   → upload_platform   (必填，存 platform_id)
- *   商品/品牌名 → product_name      (必填)
- *   核心卖点   → selling_points    (必填)
- *   目标受众   → target_customer
- *   风格关键词 → brand_style
- *   禁忌/合规  → compliance_notes
- *   语言/市场  → target_market
- *   参考图     → reference_image_url（生成时作顶层 reference_image_url 透传）
- * 另带 _mode: 'business' 作为来源标记。
+ * 平台 / 参考图为每次生成的选择，不自动填。
+ * 回写（新建商品存回资料库）为 Part 3c，本版不含。
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface BusinessBrief {
-  upload_platform: string; // platform_id, e.g. 'taobao'
+  upload_platform: string;
   product_name: string;
   selling_points: string;
   target_customer?: string;
@@ -33,7 +20,20 @@ export interface BusinessBrief {
   compliance_notes?: string;
   target_market?: string;
   reference_image_url?: string;
+  product_id?: number; // 选中已有商品时带上，供 Part 3c 回写判定
   _mode: 'business';
+}
+
+interface BrandLite {
+  name?: string;
+  tone_of_voice?: string;
+  forbidden_words?: string[] | string | null;
+}
+interface ProductLite {
+  id: number;
+  product_name: string;
+  category?: string;
+  selling_points?: string;
 }
 
 interface BusinessBriefDrawerProps {
@@ -41,9 +41,11 @@ interface BusinessBriefDrawerProps {
   onSubmit: (brief: BusinessBrief) => void;
   onCancel?: () => void;
   uploadImage?: (file: File) => Promise<string>;
+  fetchBrand?: () => Promise<BrandLite | null>;
+  fetchProducts?: () => Promise<ProductLite[]>;
+  fetchProductDetail?: (id: number) => Promise<Record<string, unknown>>;
 }
 
-// id 对齐后端 platform_specs / platform_prompt_loader 的匹配键；label 仅用于显示
 const PLATFORMS: { id: string; label: string; hint: string }[] = [
   { id: 'taobao', label: '淘宝 / 天猫', hint: '主图 800×800 · 详情页首屏 · 白底 / 场景图 · 极限词合规' },
   { id: 'jd', label: '京东', hint: '主图 800×800 · 详情页 · 品质感 · 资质合规' },
@@ -54,8 +56,17 @@ const PLATFORMS: { id: string; label: string; hint: string }[] = [
   { id: 'alibaba_intl', label: '阿里国际站', hint: '英文 / 多语 · B2B 详情 · 跨境合规' },
 ];
 
-export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel, uploadImage }: BusinessBriefDrawerProps) {
-  const [platform, setPlatform] = useState(''); // platform_id
+function asText(v: unknown): string {
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.join('、');
+  if (typeof v === 'string') return v;
+  return String(v);
+}
+
+export default function BusinessBriefDrawer({
+  isLight, onSubmit, onCancel, uploadImage, fetchBrand, fetchProducts, fetchProductDetail,
+}: BusinessBriefDrawerProps) {
+  const [platform, setPlatform] = useState('');
   const [productName, setProductName] = useState('');
   const [sellingPoints, setSellingPoints] = useState('');
   const [targetCustomer, setTargetCustomer] = useState('');
@@ -67,12 +78,96 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel, uploa
   const [refUploading, setRefUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 资料库
+  const [companyName, setCompanyName] = useState('');
+  const [products, setProducts] = useState<ProductLite[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [libFields, setLibFields] = useState<Set<string>>(new Set());
+
+  const markLib = (keys: string[]) =>
+    setLibFields((prev) => {
+      const n = new Set(prev);
+      keys.forEach((k) => n.add(k));
+      return n;
+    });
+  const clearLib = (key: string) =>
+    setLibFields((prev) => {
+      if (!prev.has(key)) return prev;
+      const n = new Set(prev);
+      n.delete(key);
+      return n;
+    });
+
+  // 开抽屉：拉公司(静默填)+ 商品列表
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        if (fetchBrand) {
+          const b = await fetchBrand();
+          if (alive && b) {
+            if (b.name) setCompanyName(b.name);
+            const fw = asText(b.forbidden_words);
+            const tone = asText(b.tone_of_voice);
+            const filled: string[] = [];
+            if (fw) { setCompliance(fw); filled.push('compliance'); }
+            if (tone) { setBrandStyle(tone); filled.push('brand_style'); }
+            if (filled.length) markLib(filled);
+          }
+        }
+        if (fetchProducts) {
+          const list = await fetchProducts();
+          if (alive && Array.isArray(list)) setProducts(list);
+        }
+      } catch (e) {
+        console.error('library load failed', e);
+      }
+    })();
+    return () => { alive = false; };
+  }, [fetchBrand, fetchProducts]);
+
+  const selectProduct = async (id: number) => {
+    setSelectedProductId(id);
+    if (!fetchProductDetail) return;
+    try {
+      const d = await fetchProductDetail(id);
+      const pn = asText(d.product_name);
+      const sp = asText(d.selling_points);
+      const tc = asText(d.target_customer);
+      const bs = asText(d.brand_style);
+      const cn = asText(d.compliance_notes);
+      const mk = asText(d.target_market);
+      const filled: string[] = [];
+      if (pn) { setProductName(pn); filled.push('product_name'); }
+      if (sp) { setSellingPoints(sp); filled.push('selling_points'); }
+      if (tc) { setTargetCustomer(tc); filled.push('target_customer'); }
+      if (bs) { setBrandStyle(bs); filled.push('brand_style'); }
+      if (cn) { setCompliance(cn); filled.push('compliance'); }
+      if (mk) { setMarket(mk); filled.push('market'); }
+      markLib(filled);
+    } catch (e) {
+      console.error('product detail failed', e);
+    }
+  };
+
+  const newProduct = () => {
+    setSelectedProductId(null);
+    setProductName('');
+    setSellingPoints('');
+    setTargetCustomer('');
+    setMarket('');
+    // 公司级（compliance/brand_style）保留
+    setLibFields((prev) => {
+      const n = new Set(prev);
+      ['product_name', 'selling_points', 'target_customer', 'market'].forEach((k) => n.delete(k));
+      return n;
+    });
+  };
+
   const canSubmit =
     platform.trim() !== '' && productName.trim() !== '' && sellingPoints.trim() !== '';
-
   const selectedHint = PLATFORMS.find((p) => p.id === platform)?.hint;
 
-  // 主题样式
   const label = isLight ? 'text-gray-600' : 'text-gray-300';
   const labelMuted = isLight ? 'text-gray-400' : 'text-gray-500';
   const field = isLight
@@ -89,9 +184,11 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel, uploa
   const dashBox = isLight
     ? 'border border-dashed border-gray-300 text-gray-400 hover:border-gray-400'
     : 'border border-dashed border-white/15 text-gray-400 hover:border-white/30';
+  const libBox = isLight ? 'bg-indigo-50 text-indigo-600' : 'bg-indigo-500/10 text-indigo-300';
 
-  // 醒目必填标记
   const Req = () => <span className="ml-0.5 text-rose-500 font-bold text-base leading-none">*</span>;
+  const LibTag = ({ k }: { k: string }) =>
+    libFields.has(k) ? <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] ${libBox}`}>来自资料库</span> : null;
 
   const handleRefChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,21 +196,13 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel, uploa
     setRefUploading(true);
     try {
       const url = await uploadImage(file);
-      if (url) {
-        setReferenceUrl(url);
-        setRefName(file.name);
-      }
+      if (url) { setReferenceUrl(url); setRefName(file.name); }
     } catch (err) {
       console.error('reference upload failed', err);
     } finally {
       setRefUploading(false);
       if (e.target) e.target.value = '';
     }
-  };
-
-  const clearReference = () => {
-    setReferenceUrl('');
-    setRefName('');
   };
 
   const handleStart = () => {
@@ -127,79 +216,81 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel, uploa
       compliance_notes: compliance.trim() || undefined,
       target_market: market.trim() || undefined,
       reference_image_url: referenceUrl || undefined,
+      product_id: selectedProductId ?? undefined,
       _mode: 'business',
     });
   };
 
   return (
     <div data-testid="business-brief-drawer" className="space-y-4 text-sm">
-      {/* 上架平台（龙头，必填） */}
-      <div>
-        <div className={`mb-1.5 ${label}`}>
-          上架平台<Req />
+      {/* 资料库：公司 + 商品选择器 */}
+      {(companyName || products.length > 0) && (
+        <div className={`rounded-lg px-3 py-2.5 ${libBox}`}>
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium">
+            检测到{companyName ? `「${companyName}」` : ''}资料 · 选商品自动填
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {products.map((p) => (
+              <span key={p.id} role="button" tabIndex={0} onClick={() => selectProduct(p.id)}
+                className={`${chipBase} ${selectedProductId === p.id ? chipOn : (isLight ? 'border border-gray-200 bg-white text-gray-600' : 'border border-white/10 bg-black/20 text-gray-300')}`}>
+                {p.product_name}
+              </span>
+            ))}
+            <span role="button" tabIndex={0} onClick={newProduct}
+              className={`${chipBase} ${selectedProductId === null ? chipOn : dashBox}`}>
+              ＋ 新建商品（同公司）
+            </span>
+          </div>
         </div>
+      )}
+
+      {/* 上架平台（必填） */}
+      <div>
+        <div className={`mb-1.5 ${label}`}>上架平台<Req /></div>
         <div className="flex flex-wrap gap-1.5">
           {PLATFORMS.map((p) => (
-            <span
-              key={p.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => setPlatform(p.id)}
-              className={`${chipBase} ${platform === p.id ? chipOn : chipOff}`}
-            >
-              {p.label}
-            </span>
+            <span key={p.id} role="button" tabIndex={0} onClick={() => setPlatform(p.id)}
+              className={`${chipBase} ${platform === p.id ? chipOn : chipOff}`}>{p.label}</span>
           ))}
         </div>
-        {selectedHint && (
-          <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${hintBox}`}>
-            按平台自动带出：{selectedHint}
-          </div>
-        )}
+        {selectedHint && <div className={`mt-2 rounded-lg px-3 py-2 text-xs ${hintBox}`}>按平台自动带出：{selectedHint}</div>}
       </div>
 
       {/* 商品 / 品牌名（必填） */}
       <div>
-        <div className={`mb-1.5 ${label}`}>
-          商品 / 品牌名<Req />
-        </div>
-        <input
-          className={field}
-          value={productName}
-          onChange={(e) => setProductName(e.target.value)}
-        />
+        <div className={`mb-1.5 ${label}`}>商品 / 品牌名<Req /><LibTag k="product_name" /></div>
+        <input className={field} value={productName}
+          onChange={(e) => { setProductName(e.target.value); clearLib('product_name'); }} />
       </div>
 
       {/* 核心卖点（必填） */}
       <div>
-        <div className={`mb-1.5 ${label}`}>
-          核心卖点<Req />
-        </div>
-        <textarea
-          className={`${field} resize-y`}
-          rows={2}
-          value={sellingPoints}
-          onChange={(e) => setSellingPoints(e.target.value)}
-        />
+        <div className={`mb-1.5 ${label}`}>核心卖点<Req /><LibTag k="selling_points" /></div>
+        <textarea className={`${field} resize-y`} rows={2} value={sellingPoints}
+          onChange={(e) => { setSellingPoints(e.target.value); clearLib('selling_points'); }} />
       </div>
 
       {/* 选填两列 */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <div className={`mb-1.5 ${labelMuted}`}>目标受众</div>
-          <input className={field} value={targetCustomer} onChange={(e) => setTargetCustomer(e.target.value)} placeholder="选填" />
+          <div className={`mb-1.5 ${labelMuted}`}>目标受众<LibTag k="target_customer" /></div>
+          <input className={field} value={targetCustomer} placeholder="选填"
+            onChange={(e) => { setTargetCustomer(e.target.value); clearLib('target_customer'); }} />
         </div>
         <div>
-          <div className={`mb-1.5 ${labelMuted}`}>风格关键词</div>
-          <input className={field} value={brandStyle} onChange={(e) => setBrandStyle(e.target.value)} placeholder="选填" />
+          <div className={`mb-1.5 ${labelMuted}`}>风格关键词<LibTag k="brand_style" /></div>
+          <input className={field} value={brandStyle} placeholder="选填"
+            onChange={(e) => { setBrandStyle(e.target.value); clearLib('brand_style'); }} />
         </div>
         <div>
-          <div className={`mb-1.5 ${labelMuted}`}>禁忌 / 合规</div>
-          <input className={field} value={compliance} onChange={(e) => setCompliance(e.target.value)} placeholder="选填" />
+          <div className={`mb-1.5 ${labelMuted}`}>禁忌 / 合规<LibTag k="compliance" /></div>
+          <input className={field} value={compliance} placeholder="选填"
+            onChange={(e) => { setCompliance(e.target.value); clearLib('compliance'); }} />
         </div>
         <div>
-          <div className={`mb-1.5 ${labelMuted}`}>语言 / 市场</div>
-          <input className={field} value={market} onChange={(e) => setMarket(e.target.value)} placeholder="中文 · 选填" />
+          <div className={`mb-1.5 ${labelMuted}`}>语言 / 市场<LibTag k="market" /></div>
+          <input className={field} value={market} placeholder="中文 · 选填"
+            onChange={(e) => { setMarket(e.target.value); clearLib('market'); }} />
         </div>
       </div>
 
@@ -211,15 +302,11 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel, uploa
           <div className={`flex items-center gap-2 rounded-lg px-3 py-2 ${hintBox}`}>
             <img src={referenceUrl} alt="" className="h-8 w-8 rounded object-cover" />
             <span className="max-w-[150px] truncate text-xs">{refName}</span>
-            <button type="button" onClick={clearReference} className="ml-auto text-xs text-gray-500 hover:text-rose-400" aria-label="移除参考图">✕</button>
+            <button type="button" onClick={() => { setReferenceUrl(''); setRefName(''); }} className="ml-auto text-xs text-gray-500 hover:text-rose-400" aria-label="移除参考图">✕</button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={refUploading || !uploadImage}
-            className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs ${dashBox} disabled:opacity-50`}
-          >
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={refUploading || !uploadImage}
+            className={`flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs ${dashBox} disabled:opacity-50`}>
             {refUploading ? '上传中…' : '＋ 上传产品 / 参照图'}
           </button>
         )}
@@ -227,30 +314,15 @@ export default function BusinessBriefDrawer({ isLight, onSubmit, onCancel, uploa
 
       {/* 操作区 */}
       <div className="flex items-center gap-2 pt-1">
-        <button
-          type="button"
-          disabled={!canSubmit}
-          onClick={handleStart}
+        <button type="button" disabled={!canSubmit} onClick={handleStart}
           className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
-            canSubmit
-              ? 'bg-indigo-500 text-white hover:bg-indigo-600'
-              : isLight
-                ? 'cursor-not-allowed bg-gray-100 text-gray-400'
-                : 'cursor-not-allowed bg-white/5 text-gray-500'
-          }`}
-        >
+            canSubmit ? 'bg-indigo-500 text-white hover:bg-indigo-600'
+              : isLight ? 'cursor-not-allowed bg-gray-100 text-gray-400' : 'cursor-not-allowed bg-white/5 text-gray-500'}`}>
           {canSubmit ? '开始生成' : '填齐必填项后开始生成'}
         </button>
         {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className={`rounded-xl px-3 py-2.5 text-sm ${
-              isLight ? 'text-gray-500 hover:bg-gray-100' : 'text-gray-400 hover:bg-white/5'
-            }`}
-          >
-            取消
-          </button>
+          <button type="button" onClick={onCancel}
+            className={`rounded-xl px-3 py-2.5 text-sm ${isLight ? 'text-gray-500 hover:bg-gray-100' : 'text-gray-400 hover:bg-white/5'}`}>取消</button>
         )}
       </div>
     </div>

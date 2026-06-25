@@ -168,6 +168,16 @@ export const api = {
     me: () => client.get<AuthUser>('/auth/me').then(r => r.data),
   },
 
+  // Library
+  library: {
+    brand: (tenantId?: number) =>
+      client.get("/library/brand", { params: tenantId != null ? { tenant_id: tenantId } : {} }).then(r => r.data),
+    products: (tenantId?: number) =>
+      client.get("/library/products", { params: tenantId != null ? { tenant_id: tenantId } : {} }).then(r => r.data),
+    product: (id: number) =>
+      client.get(`/library/product/${id}`).then(r => r.data),
+  },
+
   // Projects
   projects: {
     list: () => client.get<Project[]>('/projects/').then(r => r.data),
