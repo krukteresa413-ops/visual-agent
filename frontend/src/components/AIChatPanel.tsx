@@ -456,7 +456,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
           {(['quick','business'] as const).map((m) => (
             <button key={m} type="button" onClick={() => setGenMode(m)}
               className={`rounded-md px-3 py-1 text-xs ${genMode===m ? (isLight?'bg-white font-medium shadow-sm':'bg-white/10 font-medium') : (isLight?'text-gray-500':'text-gray-400')}`}>
-              {m === 'quick' ? '快速出图' : '商务出图'}
+              {m === 'quick' ? '快速图视频' : '商务图视频'}
             </button>
           ))}
         </div>
@@ -490,7 +490,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         ) : genMode === 'business' ? (
           <BusinessBriefDrawer
             isLight={isLight ?? false}
-            onSubmit={(brief) => runGeneration(`${brief.product_name}（商务出图）`, brief)}
+            onSubmit={(brief) => runGeneration(`${brief.product_name}（商务图视频）`, brief)}
               uploadImage={uploadReferenceImage}
               fetchBrand={() => api.library.brand()}
               fetchProducts={() => api.library.products()}
