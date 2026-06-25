@@ -1,9 +1,9 @@
-import os, subprocess
+import os, subprocess, asyncio
 
 async def parse_document(filepath: str, content_type: str) -> str:
     ext = filepath.rsplit('.', 1)[-1].lower()
     if ext == 'pdf' or 'pdf' in content_type:
-        return _parse_pdf(filepath)
+        return await asyncio.to_thread(_parse_pdf, filepath)
     elif ext in ('docx', 'doc') or 'word' in content_type:
         return _parse_docx(filepath)
     elif ext in ('xlsx', 'xls') or 'spreadsheet' in content_type:
@@ -21,9 +21,17 @@ def _parse_pdf(fp: str) -> str:
         r = subprocess.run(['pdftotext', '-layout', fp, '-'], capture_output=True, text=True, timeout=30)
         if r.returncode == 0 and r.stdout.strip(): return r.stdout
     except: pass
-    from PyPDF2 import PdfReader
-    reader = PdfReader(fp)
-    return '\n'.join(page.extract_text() or '' for page in reader.pages)
+    try:
+        from PyPDF2 import PdfReader
+        reader = PdfReader(fp)
+        text = '\n'.join(page.extract_text() or '' for page in reader.pages)
+        if text.strip():
+            return text
+    except Exception:
+        pass
+    # 第三层兜底:扫描/图片型 PDF 走文档解析(大模型版)
+    from app.services.ocr_fallback import ocr_pdf
+    return ocr_pdf(fp)
 
 def _parse_docx(fp: str) -> str:
     from docx import Document
