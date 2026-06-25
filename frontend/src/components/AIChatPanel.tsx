@@ -132,9 +132,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
 
   const clearUploadedFile = () => setUploadedFile(null);
 
-  const handleSubmit = async () => {
-    const prompt = input.trim();
-    if (!prompt || isStreaming) return;
+  const runGeneration = async (prompt: string, brief?: object) => {
     const promptWithContext = chatAssetContext?.image_url
       ? `${prompt}\n\n参考图片: ${chatAssetContext.image_url}`
       : prompt;
@@ -169,6 +167,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         image_model: autoModel ? undefined : selectedModel || undefined,
         auto_model: autoModel,
         agent_mode: agentMode,
+        brief,
         reference_image_url: refUrl,
       } as Parameters<typeof api.generation.quickGenerate>[0] & { agent_mode: AgentMode });
       onTaskStarted?.(task.task_id);
@@ -218,6 +217,12 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         timestamp: Date.now(),
       }]);
     }
+  };
+
+  const handleSubmit = async () => {
+    const prompt = input.trim();
+    if (!prompt || isStreaming) return;
+    runGeneration(prompt);
   };
 
   // Auto-scroll to bottom
@@ -477,7 +482,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         ) : genMode === 'business' ? (
           <BusinessBriefDrawer
             isLight={isLight ?? false}
-            onSubmit={() => {}}
+            onSubmit={(brief) => runGeneration(`${brief.product_name}（商务出图）`, brief)}
           />
         ) : (
           <div className={`text-sm leading-relaxed rounded-2xl border px-3 py-3 ${bubbleAI}`}>
