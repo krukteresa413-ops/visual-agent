@@ -594,7 +594,7 @@ class DataEyesAIImageProvider(ImageGenerationProvider):
         return match.group(1) if match else None
 
     async def _generate_nanobanana_openai(
-        self, request: ImageGenerationRequest, client
+        self, request: ImageGenerationRequest, client, image_urls: list[str] | None = None
     ) -> ImageGenerationResult:
         """Generate image via chat/completions for Gemini/NanoBanana models.
 
@@ -603,11 +603,18 @@ class DataEyesAIImageProvider(ImageGenerationProvider):
         """
         import base64 as _b64
 
+        source_image_urls = image_urls or request.options.get("image_urls") or []
+        if source_image_urls:
+            content = [{"type": "text", "text": request.prompt}]
+            content.extend({"type": "image_url", "image_url": {"url": url}} for url in source_image_urls)
+        else:
+            content = request.prompt
+
         chat_payload = {
             "model": request.model or "gemini-2.5-flash-image",
             "messages": [{
                 "role": "user",
-                "content": request.prompt,
+                "content": content,
             }],
             "max_tokens": 4096,
         }

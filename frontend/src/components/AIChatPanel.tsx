@@ -70,14 +70,13 @@ interface Props {
   chatAssetContext?: ChatAssetContext | null;
 }
 
-const idleMessage = '输入你想生成或调整的画面，我会直接执行。生成过程统一在底部 AI创作流程 中展示。';
 const runningMessage = '正在生成，详细过程已移到底部 AI创作流程。';
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onProgressUpdate, onSkillsOpen, skillPromptSelected, onSkillPromptConsumed, onTaskStarted, onGenerationComplete, projectId, projectName, chatAssetContext }: Props) {
+export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onProgressUpdate, onSkillsOpen, skillPromptSelected, onSkillPromptConsumed, onTaskStarted, onGenerationComplete, projectId, chatAssetContext }: Props) {
   const [chatState, dispatch] = useReducer(chatReducer, initialChatState);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -415,7 +414,6 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const textColor = isLight ? 'text-gray-900' : 'text-white';
   const subText = isLight ? 'text-gray-500' : 'text-gray-400';
   const placeholderText = isLight ? 'text-gray-300' : 'text-gray-600';
-  const bubbleAI = isLight ? 'bg-orange-50 border-orange-200' : 'bg-orange-900/30 border-orange-700/50';
   const toolIconColor = isLight ? 'text-gray-400 hover:text-gray-700' : 'text-gray-500 hover:text-gray-300';
   const agentChipBg = isLight ? 'bg-gray-100' : 'bg-white/10';
   const dropdownBg = isLight ? 'bg-white border-gray-200' : 'bg-gray-800 border-white/10';
@@ -436,7 +434,6 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     <div data-ai-chat-panel="true" className={`flex flex-col h-full ${bg} border-l ${isLight ? 'border-gray-200' : 'border-white/5'}`}>
       {/* ── Header: project name + action icons ── */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
-        <span className={`text-sm font-medium ${textColor}`}>{projectName || 'AI 对话'}</span>
         <div className="flex items-center gap-3">
           {onClose && (
             <button onClick={onClose} className={`${toolIconColor} transition-colors text-sm`}>✕</button>
@@ -499,11 +496,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
               fetchProducts={() => api.library.products()}
               fetchProductDetail={(id) => api.library.product(id)}
           />
-        ) : (
-          <div className={`text-sm leading-relaxed rounded-2xl border px-3 py-3 ${bubbleAI}`}>
-            <div className={subText}>{idleMessage}</div>
-          </div>
-        )}
+        ) : null}
 
         <div ref={bottomRef} />
       </div>

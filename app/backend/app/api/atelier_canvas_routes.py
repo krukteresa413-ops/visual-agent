@@ -48,6 +48,7 @@ class CanvasConnection(BaseModel):
     target_id: str
     label: str = ""
     relation_type: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 class ViewportState(BaseModel):

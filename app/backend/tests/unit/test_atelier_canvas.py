@@ -148,6 +148,38 @@ async def test_put_canvas_state_preserves_connection_relation_type():
 
 
 @pytest.mark.asyncio
+async def test_put_canvas_state_preserves_connection_metadata():
+    import json
+    import main; app = main.app
+    payload = {
+        "elements": [{"id": "source", "type": "key_visual", "x": 0, "y": 0}],
+        "connections": [{
+            "id": "edge-instruction",
+            "source_id": "source",
+            "target_id": "variant",
+            "label": "换蓝色背景",
+            "relation_type": "variant_of",
+            "metadata": {"instruction": "换蓝色背景"},
+        }],
+        "viewport": {"x": 0, "y": 0, "scale": 1},
+    }
+    with patch("app.api.atelier_canvas_routes.SessionLocal") as ms:
+        mdb = MagicMock()
+        mdb.query.return_value.filter.return_value.first.return_value = None
+        ms.return_value = mdb
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.put("/api/v1/projects/1/canvas-state", json=payload)
+
+    assert resp.status_code == 200
+    assert resp.json()["connections"][0]["relation_type"] == "variant_of"
+    assert resp.json()["connections"][0]["metadata"]["instruction"] == "换蓝色背景"
+    saved = json.loads(mdb.add.call_args.args[0].connections_json)
+    assert saved[0]["relation_type"] == "variant_of"
+    assert saved[0]["metadata"]["instruction"] == "换蓝色背景"
+
+
+@pytest.mark.asyncio
 async def test_put_canvas_state_updates_existing():
     import main; app = main.app
     existing = make_mock_canvas_state()

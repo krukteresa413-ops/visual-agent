@@ -65,6 +65,48 @@ class TestGeminiChatCompletionsFormat:
             call_args = mock_client.return_value.post.call_args
             assert "/chat/completions" in str(call_args)
 
+
+    @pytest.mark.asyncio
+    async def test_gemini_img2img_sends_multimodal_content_when_image_urls_are_provided(self):
+        """Canvas image edit must pass source images into Gemini/NanoBanana chat content."""
+        provider = DataEyesAIImageProvider(
+            api_key="test-key",
+            base_url="https://cloud.dataeyes.ai/v1"
+        )
+        provider._registry = {
+            "gemini-2.5-flash-image": {
+                "id": "gemini-2.5-flash-image",
+                "format": "nanobanana_openai",
+            }
+        }
+        provider._api_key = "test-key"
+
+        markdown_response = "Here is your image:\n![image](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==)"
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "id": "chatcmpl-img2img",
+            "choices": [{"message": {"content": markdown_response}}]
+        }
+
+        with patch.object(provider, '_get_client') as mock_client:
+            mock_client.return_value.post = AsyncMock(return_value=mock_response)
+            req = ImageGenerationRequest(
+                provider="dataeyes",
+                prompt="把背景调成白色，保留主体",
+                model="gemini-2.5-flash-image",
+                options={"image_urls": ["http://example.test/source.png"]},
+            )
+            result = await provider.generate(req)
+
+        assert result.status == "succeeded"
+        payload = mock_client.return_value.post.call_args.kwargs["json"]
+        content = payload["messages"][0]["content"]
+        assert content == [
+            {"type": "text", "text": "把背景调成白色，保留主体"},
+            {"type": "image_url", "image_url": {"url": "http://example.test/source.png"}},
+        ]
+
     @pytest.mark.asyncio
     async def test_gemini_model_no_image_in_response_raises(self):
         """If chat completions returns no image markdown, should raise error."""
