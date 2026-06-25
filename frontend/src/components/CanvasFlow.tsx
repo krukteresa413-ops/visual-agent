@@ -79,7 +79,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   const [actionProgress, setActionProgress] = useState('idle');
   const [actionError, setActionError] = useState<string | null>(null);
   const { getNodes, getViewport } = useReactFlow();
-  const { saveCanvas, saveStatus, rememberSavedCanvas } = useCanvasPersistence(projectId);
+  const { saveCanvas, rememberSavedCanvas } = useCanvasPersistence(projectId);
 
   const onRelationLabelCommit = useCallback((edgeId: string, label: string) => {
     setEdges(current => {
@@ -144,9 +144,6 @@ function CanvasFlowInner(props: CanvasFlowProps) {
     });
   }, [getNodes, getViewport, makeEditableRelationEdges, saveCanvas, setEdges]);
 
-  const saveCurrentCanvas = useCallback(() => {
-    return saveCanvas({ nodes, edges, viewport: getViewport() });
-  }, [edges, getViewport, nodes, saveCanvas]);
 
   const noteDragStop = useCallback(() => {
 void saveCanvas({ nodes: getNodes() as typeof nodes, edges, viewport: getViewport() });
@@ -268,17 +265,8 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4">
         <div className="flex min-w-0 items-center gap-3">
           <span className="text-sm font-semibold text-gray-900">MOYAG Canvas</span>
-          <span data-flow-node-count className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600">{nodes.length} elements</span>
           {loading && <span className="text-xs text-gray-400">加载中</span>}
           {loadError && <span className="text-xs text-orange-500">使用本地默认画布</span>}
-          <span data-flow-save-status className="text-xs text-gray-400">{saveStatus === 'idle' ? '未保存' : saveStatus === 'saving' ? '保存中' : saveStatus === 'saved' ? '已保存' : '保存失败'}</span>
-          <button
-            data-flow-save-button
-            onClick={() => { void saveCurrentCanvas(); }}
-            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-          >
-            保存
-          </button>
         </div>
         <span className="text-xs text-gray-400">React Flow</span>
       </div>

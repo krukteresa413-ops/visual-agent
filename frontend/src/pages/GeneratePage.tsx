@@ -256,8 +256,6 @@ export default function GeneratePage() {
           <a href="/video-edit" className="text-xs px-3 py-1 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors border border-purple-500/20">🎬 视频编辑</a>
           {!isFullCanvas && <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-lg object-contain" />}
           {!isFullCanvas && <span className="font-semibold text-lg text-white tracking-tight">视觉 Agent</span>}
-          {isFullCanvas && <span className="text-sm font-medium text-white ml-2">{brief.product_name || '未命名'}</span>}
-          {isFullCanvas && <button onClick={() => { window.location.href = '/'; }} className="ml-2 px-2 py-0.5 text-[10px] bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded border border-orange-500/30 transition-colors">+ 新建画布</button>}
         </div>
         <div className="flex items-center gap-3">
           {result && <span className="text-xs text-gray-400">耗时 {formatElapsedSeconds(startTime, Date.now())}</span>}
@@ -272,12 +270,6 @@ export default function GeneratePage() {
             <span className="text-xs text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 max-w-[200px] truncate" title={promptTemplate}>
               🎨 风格参考已加载
             </span>
-          )}
-          {isCanvas && (
-            <button onClick={() => setPanelOpen(o => !o)}
-              className={`px-3 py-1.5 rounded-lg text-xs transition-all border ${panelOpen ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400' : 'bg-white/5 border-white/10 text-gray-400 hover:text-gray-200'}`}>
-              {panelOpen ? '✕ 收起' : '☰ 资料'}
-            </button>
           )}
         </div>
       </header>
