@@ -60,6 +60,7 @@ async def run_turn(user_message: str, reference_image_url: Optional[str] = None)
             trace.append({"tool": tc.function.name, "args": args, "result": result})
             if isinstance(result, dict) and result.get("image_urls"):
                 assets.extend(result["image_urls"])
+                result = {"status": result.get("status"), "image_count": len(result.get("image_urls") or [])}
             messages.append(
                 {
                     "role": "tool",

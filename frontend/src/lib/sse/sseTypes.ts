@@ -32,4 +32,5 @@ export type ChatLifecycleEvent = {
   message: string;
   detail: Record<string, unknown>;
   assets: ChatAssetEvent[];
+  terminalOnly?: boolean;
 };

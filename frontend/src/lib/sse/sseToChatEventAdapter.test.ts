@@ -58,6 +58,13 @@ describe('sseToChatEventAdapter', () => {
     expect(sseToChatEventAdapter(JSON.stringify(doneEvent())).phase).toBe('completed');
   });
 
+  it('treats conversational done as terminal without rendering a completion bubble', () => {
+    const event = sseToChatEventAdapter(JSON.stringify({ type: 'done', status: 'done' }));
+    expect(event.phase).toBe('completed');
+    expect(event.message).toBe('');
+    expect(event.assets).toEqual([]);
+  });
+
   it('returns null for invalid JSON strings', () => {
     expect(sseToChatEventAdapter('{bad json')).toBeNull();
   });

@@ -46,5 +46,6 @@ export function sseToChatEventAdapter(input: MoyagProgressEvent | string): ChatL
     message: String(event.message || ''),
     detail,
     assets: extractAssets(detail),
+    terminalOnly: (event.type === 'done' || event.status === 'done') && !event.message && !event.step && extractAssets(detail).length === 0,
   };
 }

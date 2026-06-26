@@ -93,6 +93,15 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   if (event.phase === 'heartbeat') return state;
 
   const phase = toChatPhase(event.phase);
+  if (event.terminalOnly) {
+    return {
+      phase,
+      percent: phase === 'completed' ? 100 : event.percent,
+      error: phase === 'error' ? event.message : null,
+      messages: state.messages,
+    };
+  }
+
   const message: ChatMessage = {
     id: nextId(state.messages),
     role: 'assistant',

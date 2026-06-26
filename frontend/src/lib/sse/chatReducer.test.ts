@@ -38,6 +38,15 @@ describe('chatReducer', () => {
     expect(state.percent).toBe(100);
   });
 
+  it('does not append a synthetic completion bubble for message-less conversational done events', () => {
+    const submitted = chatReducer(initialChatState, { type: 'submit', prompt: '只回复一句你好' });
+    const state = chatReducer(submitted, { type: 'sse', event: sseToChatEventAdapter({ type: 'done', status: 'done' })! });
+    expect(state.phase).toBe('completed');
+    expect(state.percent).toBe(100);
+    expect(state.messages).toHaveLength(1);
+    expect(state.messages.at(-1)?.role).toBe('user');
+  });
+
   it('maps errors to error phase', () => {
     const state = chatReducer(initialChatState, { type: 'sse', event: sseToChatEventAdapter(errorEvent('失败'))! });
     expect(state.phase).toBe('error');

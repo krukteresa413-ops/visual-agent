@@ -22,6 +22,12 @@ describe('MessageRenderer LS3-4 contract', () => {
     expect(source).toContain('<video');
   });
 
+  it('renders assistant image assets as compact chat thumbnails, not generation result cards', () => {
+    expect(source).toContain('data-message-asset-list');
+    expect(source).toContain('data-message-image-thumb');
+    expect(source).not.toMatch(/快速图视频|商务图视频|生成完成/);
+  });
+
   it('uses lo tokens instead of Ant or Lovart-specific styling and names', () => {
     expect(source).toContain('var(--lo-bg-float)');
     expect(source).toContain('var(--lo-border-neutral-l1)');
