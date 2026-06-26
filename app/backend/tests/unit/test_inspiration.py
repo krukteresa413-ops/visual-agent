@@ -127,6 +127,22 @@ class TestInspirationAPI:
         assert len(data) == 2
         assert all(item["category"] == "poster" for item in data)
 
+    def test_rewrites_static_absolute_preview_url_to_same_origin_path(self, db_session, client):
+        from app.models.inspiration import InspirationItem
+
+        db_session.add(InspirationItem(
+            category="poster", sub_category="电影海报",
+            preview_url="http://47.237.203.217/static/inspiration/assets/posters/algorithm-fog.webp",
+            prompt_template="Movie poster for {product_name}",
+            aspect_ratio="9 / 16",
+        ))
+        db_session.commit()
+
+        resp = client.get("/api/v1/inspirations?category=poster")
+
+        assert resp.status_code == 200
+        assert resp.json()[0]["preview_url"] == "/static/inspiration/assets/posters/algorithm-fog.webp"
+
     def test_filter_by_sub_category(self, db_session, client):
         _seed(db_session)
         resp = client.get("/api/v1/inspirations?sub_category=App 图标")
@@ -183,3 +199,36 @@ class TestInspirationAPI:
         assert resp.status_code == 200
         data = resp.json()
         assert len(data) == 0
+
+
+def test_normalize_preview_url_host_agnostic_and_guards():
+    from app.api.inspiration_routes import _normalize_preview_url
+    # http / https / 任意 host 的 /static 绝对地址 → 同源相对路径
+    assert _normalize_preview_url("http://47.237.203.217/static/a/b.webp") == "/static/a/b.webp"
+    assert _normalize_preview_url("https://47.237.203.217/static/a/b.webp") == "/static/a/b.webp"
+    assert _normalize_preview_url("https://moyaops.xyz/static/a/b.webp") == "/static/a/b.webp"
+    # 非 /static 外链、已是相对路径、空串 → 原样放行（幂等）
+    assert _normalize_preview_url("https://cdn.example.com/img/x.webp") == "https://cdn.example.com/img/x.webp"
+    assert _normalize_preview_url("/static/a/b.webp") == "/static/a/b.webp"
+    assert _normalize_preview_url("") == ""
+
+
+def test_detail_endpoint_normalizes_static_url(db_session):
+    from app.models.inspiration import InspirationItem
+    from app.api.inspiration_routes import router
+    item = InspirationItem(
+        category="poster", sub_category="电影海报",
+        preview_url="http://47.237.203.217/static/inspiration/assets/posters/x.webp",
+        prompt_template="t", aspect_ratio="9 / 16",
+    )
+    db_session.add(item); db_session.commit(); db_session.refresh(item)
+
+    def override_get_db():
+        yield db_session
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_db] = override_get_db
+    c = TestClient(app)
+    resp = c.get(f"/api/v1/inspirations/{item.id}")
+    assert resp.status_code == 200
+    assert resp.json()["preview_url"] == "/static/inspiration/assets/posters/x.webp"

@@ -4,11 +4,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
+from urllib.parse import urlparse
 
 from app.db.session import get_db
 from app.models.inspiration import InspirationItem
 
 router = APIRouter(prefix="/api/v1/inspirations", tags=["inspiration"])
+
+
+def _normalize_preview_url(preview_url: str) -> str:
+    parsed = urlparse(preview_url)
+    if parsed.scheme and parsed.netloc and parsed.path.startswith("/static/"):
+        return parsed.path
+    return preview_url
 
 
 @router.get("/categories")
@@ -56,7 +64,7 @@ def list_inspirations(
             "id": item.id,
             "category": item.category,
             "sub_category": item.sub_category,
-            "preview_url": item.preview_url,
+            "preview_url": _normalize_preview_url(item.preview_url),
             "prompt_template": item.prompt_template,
             "aspect_ratio": item.aspect_ratio,
             "source": item.source,
@@ -77,7 +85,7 @@ def get_inspiration(item_id: int, db: Session = Depends(get_db)):
         "id": item.id,
         "category": item.category,
         "sub_category": item.sub_category,
-        "preview_url": item.preview_url,
+        "preview_url": _normalize_preview_url(item.preview_url),
         "prompt_template": item.prompt_template,
         "aspect_ratio": item.aspect_ratio,
         "source": item.source,
