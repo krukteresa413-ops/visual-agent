@@ -46,6 +46,7 @@ from app.api.auth_routes import router as auth_router
 from app.api.model_catalog_routes import router as model_catalog_router
 from app.api.skills_routes import router as skills_router
 from app.api.library_routes import router as library_router
+from app.api.chat_routes import router as chat_router
 
 
 Base.metadata.create_all(bind=engine)
@@ -93,6 +94,7 @@ app.include_router(aesthetic_router)
 app.include_router(behavior_router)
 app.include_router(unified_router)
 app.include_router(atelier_canvas_router)
+app.include_router(chat_router)
 app.include_router(video_edit_router)
 app.include_router(vision_router)
 app.include_router(font_gen_router)
