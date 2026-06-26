@@ -26,4 +26,8 @@ describe('Layout global top nav contract', () => {
     expect(source).toContain("api.projects.create('未命名项目', '')");
     expect(source).toContain('navigate(`/generate/${project.id}`)');
   });
+
+  it('makes the nav surface follow the day/night theme toggle', () => {
+    expect(source).toContain("isLight ? 'bg-white/80' : 'bg-black/80'");
+  });
 });

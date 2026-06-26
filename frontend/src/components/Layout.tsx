@@ -43,7 +43,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-white">
       {!isCanvasWorkspace && (
-        <header className="sticky top-0 z-50 w-full border-b border-gray-800 bg-black/80 backdrop-blur-md">
+        <header className={`sticky top-0 z-50 w-full border-b border-gray-800 backdrop-blur-md ${isLight ? 'bg-white/80' : 'bg-black/80'}`}>
           <div className="flex h-14 items-center gap-2 px-4">
             {/* Logo -> home */}
             <Link to="/" className="flex items-center gap-2 shrink-0 pr-2" aria-label="MOYAG 首页">
@@ -86,7 +86,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
             {/* Nav (mobile select) */}
             <select
-              className="md:hidden h-9 rounded-lg border border-gray-800 bg-black text-sm text-gray-300 px-2"
+              className={`md:hidden h-9 rounded-lg border border-gray-800 text-sm text-gray-300 px-2 ${isLight ? 'bg-white' : 'bg-black'}`}
               value={NAV.find((n) => isActive(n.to))?.to ?? '/'}
               onChange={(e) => navigate(e.target.value)}
               aria-label="导航"
@@ -100,7 +100,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <button
               onClick={handleNewProject}
               disabled={creating}
-              className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-gradient-to-r from-orange-500 to-rose-500 text-white text-sm font-medium transition-transform hover:scale-[1.03] disabled:opacity-50"
+              className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-gradient-to-r from-orange-500 to-rose-500 text-[#fff] text-sm font-medium transition-transform hover:scale-[1.03] disabled:opacity-50"
             >
               <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 5v14M5 12h14" />
@@ -121,7 +121,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <ThemeToggle isLight={isLight} toggle={toggle} />
 
             {/* Avatar (decorative) */}
-            <span className="grid place-items-center size-8 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-white text-sm font-semibold shrink-0">
+            <span className="grid place-items-center size-8 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-[#fff] text-sm font-semibold shrink-0">
               M
             </span>
           </div>
