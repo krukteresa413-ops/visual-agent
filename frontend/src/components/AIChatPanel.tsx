@@ -60,7 +60,6 @@ interface Props {
   onComplete?: (result: unknown) => void;
   onClose?: () => void;
   onProgressUpdate?: (progress: { step: string; percent: number; status: string; message: string }) => void;
-  onSkillsOpen?: () => void;
   skillPromptSelected?: string | null;
   onSkillPromptConsumed?: () => void;
   onTaskStarted?: (taskId: string) => void;
@@ -76,7 +75,7 @@ const runningMessage = '正在生成，详细过程已移到底部 AI创作流�
 // Component
 // ---------------------------------------------------------------------------
 
-export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onProgressUpdate, onSkillsOpen, skillPromptSelected, onSkillPromptConsumed, onTaskStarted, onGenerationComplete, projectId, chatAssetContext }: Props) {
+export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onProgressUpdate, skillPromptSelected, onSkillPromptConsumed, onTaskStarted, onGenerationComplete, projectId, chatAssetContext }: Props) {
   const [chatState, dispatch] = useReducer(chatReducer, initialChatState);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -551,9 +550,6 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                   <button onClick={clearUploadedFile} className="text-[10px] text-gray-500 hover:text-red-400" aria-label="移除">✕</button>
                 </div>
               )}
-              <button data-composer-tool="library" type="button" onClick={onSkillsOpen} className={`${toolIconColor} transition-colors`} title="素材库" aria-label="素材库">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
-              </button>
               <div className="relative">
                 <button
                   data-composer-tool="agent"

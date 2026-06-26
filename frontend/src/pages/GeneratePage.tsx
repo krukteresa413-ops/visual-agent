@@ -13,7 +13,6 @@ import DocumentUploader from '../components/DocumentUploader';
 import ResultTabs from '../components/ResultTabs';
 import CanvasView from '../components/CanvasView';
 import AIChatPanel from '../components/AIChatPanel';
-import SkillsPopup from '../components/SkillsPopup';
 import LibraryPanel from '../components/LibraryPanel';
 import CopywritingPanel from '../components/CopywritingPanel';
 import ThemeToggle, { useTheme } from '../components/ThemeToggle';
@@ -42,8 +41,6 @@ export default function GeneratePage() {
   const [chatAssetContext, setChatAssetContext] = useState<ChatAssetContext | null>(null);
   const [genTaskId, setGenTaskId] = useState<string | null>(null);
   const [canvasRefreshNonce, setCanvasRefreshNonce] = useState(0);
-  const [showSkills, setShowSkills] = useState(false);
-  const skillButtonRef = useRef<HTMLButtonElement>(null);
   const [pendingSkillPrompt, setPendingSkillPrompt] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
@@ -436,7 +433,6 @@ export default function GeneratePage() {
                         setViewMode('canvas');
                         setPanelOpen(false);
                       }}
-                      onSkillsOpen={() => setShowSkills(true)}
                       skillPromptSelected={pendingSkillPrompt}
                       onSkillPromptConsumed={() => setPendingSkillPrompt(null)}
                     />
@@ -624,13 +620,6 @@ export default function GeneratePage() {
         </main>
       )}
 
-          {showSkills && <SkillsPopup isLight={isLight} onClose={() => setShowSkills(false)} anchorEl={skillButtonRef.current} onSelectSkill={(prompt) => {
-            // Inject skill prompt into AI chat panel
-            setShowSkills(false);
-            // The prompt will be injected via AIChatPanel's internal handler
-            // We use a ref-based approach since AIChatPanel is already rendered
-            window.__moyagInjectSkillPrompt?.(prompt);
-          }} />}
 </div>
   );
 }

@@ -14,10 +14,9 @@ describe('AIChatPanel LS2 composer contract', () => {
     expect(source).toContain('handleSubmit()');
   });
 
-  it('renders the six composer tool positions', () => {
+  it('renders the five composer tool positions', () => {
     for (const marker of [
       'data-composer-tool="upload"',
-      'data-composer-tool="library"',
       'data-composer-tool="agent"',
       'data-composer-tool="inspiration"',
       'data-composer-tool="model"',
@@ -34,12 +33,12 @@ describe('AIChatPanel LS2 composer contract', () => {
     expect(source).toContain('data-composer-model-panel');
   });
 
-  it('has library tool with onSkillsOpen and inspiration still disabled (Part 2)', () => {
-    // library icon opens Skills popup
-    expect(source).toContain('data-composer-tool="library"');
-    expect(source).toContain('onClick={onSkillsOpen}');
-    expect(source).toContain('title="素材库"');
-    // inspiration/lightbulb still disabled (Part 2 preserves old state)
+  it('removes the library tool and its skills wiring (inspiration stays disabled)', () => {
+    // library icon and onSkillsOpen wiring fully removed
+    expect(source).not.toContain('data-composer-tool="library"');
+    expect(source).not.toContain('onSkillsOpen');
+    expect(source).not.toContain('title="素材库"');
+    // inspiration/lightbulb still present and disabled
     expect(source).toContain('data-composer-tool="inspiration"');
     expect(source).toContain('disabled');
   });
