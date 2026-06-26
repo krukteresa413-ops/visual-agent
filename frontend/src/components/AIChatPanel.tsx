@@ -155,7 +155,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: promptWithContext, reference_image_url: refUrl }),
+        body: JSON.stringify({ message: promptWithContext, reference_image_url: refUrl, project_id: projectId }),
       });
       if (!response.ok || !response.body) throw new Error('对话服务暂不可用');
       const reader = response.body.getReader();

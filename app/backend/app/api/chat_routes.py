@@ -28,6 +28,7 @@ router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     reference_image_url: Optional[str] = None
+    project_id: Optional[int] = None
 
 
 def _sse(payload: dict) -> str:
@@ -35,7 +36,26 @@ def _sse(payload: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-async def chat_event_stream(message: str, reference_image_url: Optional[str]):
+def _seed_canvas_image(project_id, image_url, label="Main Image"):
+    """把一张生成图写进该 project 的画布；任何失败都不得打断对话流。"""
+    if not project_id or not image_url:
+        return
+    try:
+        from app.api.unified_generation_routes import _ensure_canvas_image_elements
+        from app.db.session import SessionLocal
+        db = SessionLocal()
+        try:
+            _ensure_canvas_image_elements(
+                db, int(project_id),
+                {"main_image": {"url": image_url, "goal": label}},
+            )
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("canvas seed failed (non-fatal)")
+
+
+async def chat_event_stream(message: str, reference_image_url: Optional[str], project_id=None):
     """可独立测试的事件生成器：把 run_turn 的结果转成自描述 SSE 事件。"""
     yield _sse({"type": "progress", "status": "thinking", "message": "正在处理…"})
     try:
@@ -45,6 +65,7 @@ async def chat_event_stream(message: str, reference_image_url: Optional[str]):
         yield _sse({"type": "error", "status": "error", "message": str(exc)})
         return
     for url in result.get("assets", []):
+        _seed_canvas_image(project_id, url)
         yield _sse({"type": "progress", "status": "generating", "detail": {"url": url}})
     yield _sse({"type": "progress", "status": "generating", "message": result.get("reply", "")})
     yield _sse({"type": "done", "status": "done"})
@@ -54,7 +75,7 @@ async def chat_event_stream(message: str, reference_image_url: Optional[str]):
 async def chat(req: ChatRequest):
     """POST /api/v1/chat —— 流式返回 Agent 一轮对话的事件。"""
     return StreamingResponse(
-        chat_event_stream(req.message, req.reference_image_url),
+        chat_event_stream(req.message, req.reference_image_url, req.project_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
