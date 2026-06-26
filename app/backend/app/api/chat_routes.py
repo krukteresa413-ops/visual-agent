@@ -1,11 +1,13 @@
 """对话 Agent 的 SSE 端点：POST /api/v1/chat，把 run_turn 接成流式事件。
 
-事件协议（SSE，event: <type> / data: <json>）：
-  status — {message}   立即回执「正在处理」
-  asset  — {url}       每生成一张图一个事件（前端可直接落到画布）
-  reply  — {text}      Agent 的自然语言回复
-  done   — {}          结束
-  error  — {message}   出错
+事件 data 为自描述 JSON（前端 SSE 解析只读 data 行），形状对齐现有
+sseToChatEventAdapter 契约（MoyagProgressEvent）：
+  {type, status, message?, detail?{url}}
+  - status=thinking            → 思考中
+  - status=generating + detail.url → 一张生成图（前端落到消息/画布）
+  - status=generating + message    → Agent 文字回复
+  - type=done, status=done     → 结束
+  - type=error, status=error   → 出错
 本版为离散事件流（非逐 token）；逐 token 流式留作后续细化。
 """
 import json
@@ -28,23 +30,24 @@ class ChatRequest(BaseModel):
     reference_image_url: Optional[str] = None
 
 
-def _sse(event_type: str, data: dict) -> str:
-    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+def _sse(payload: dict) -> str:
+    event_type = payload.get("type", "progress")
+    return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 async def chat_event_stream(message: str, reference_image_url: Optional[str]):
-    """可独立测试的事件生成器：把 run_turn 的结果转成 SSE 事件。"""
-    yield _sse("status", {"message": "正在处理…"})
+    """可独立测试的事件生成器：把 run_turn 的结果转成自描述 SSE 事件。"""
+    yield _sse({"type": "progress", "status": "thinking", "message": "正在处理…"})
     try:
         result = await run_turn(message, reference_image_url)
     except Exception as exc:
         logger.error("chat run_turn error: %s", exc)
-        yield _sse("error", {"message": str(exc)})
+        yield _sse({"type": "error", "status": "error", "message": str(exc)})
         return
     for url in result.get("assets", []):
-        yield _sse("asset", {"url": url})
-    yield _sse("reply", {"text": result.get("reply", "")})
-    yield _sse("done", {})
+        yield _sse({"type": "progress", "status": "generating", "detail": {"url": url}})
+    yield _sse({"type": "progress", "status": "generating", "message": result.get("reply", "")})
+    yield _sse({"type": "done", "status": "done"})
 
 
 @router.post("")
