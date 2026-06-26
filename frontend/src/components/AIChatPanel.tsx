@@ -136,7 +136,57 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     return result?.url || "";
   };
 
+  const runChat = async (prompt: string) => {
+    const promptWithContext = chatAssetContext?.image_url
+      ? `${prompt}\n\n参考图片: ${chatAssetContext.image_url}`
+      : prompt;
+    const refUrl = chatAssetContext?.image_url
+      || (uploadedFile?.type === 'image' ? uploadedFile.url : undefined);
+    if (uploadedFile) clearUploadedFile();
+    setInput('');
+    dispatch({ type: 'submit', prompt });
+    setIsStreaming(true);
+    setCurrentPercent(10);
+    const token = getToken();
+    try {
+      const response = await fetch('/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message: promptWithContext, reference_image_url: refUrl }),
+      });
+      if (!response.ok || !response.body) throw new Error('对话服务暂不可用');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const chatEvent = sseToChatEventAdapter(line.slice(6));
+            if (chatEvent) dispatch({ type: 'sse', event: chatEvent });
+          } catch {
+            // skip parse errors
+          }
+        }
+      }
+      setCurrentPercent(100);
+    } catch (error) {
+      dispatch({ type: 'assistantStatus', step: '出错', content: error instanceof Error ? error.message : '对话失败', status: 'error', percent: 0 });
+    } finally {
+      setIsStreaming(false);
+    }
+  };
+
   const runGeneration = async (prompt: string, brief?: object) => {
+    if (agentMode === 'agent' && !brief) { void runChat(prompt); return; }
     const promptWithContext = chatAssetContext?.image_url
       ? `${prompt}\n\n参考图片: ${chatAssetContext.image_url}`
       : prompt;
