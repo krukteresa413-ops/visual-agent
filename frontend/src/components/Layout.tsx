@@ -7,7 +7,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle, { useTheme } from './ThemeToggle';
-import { api } from '../api/client';
 
 const NAV = [
   { to: '/', label: '首页' },
@@ -25,7 +24,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { isLight, toggle } = useTheme();
-  const [creating, setCreating] = useState(false);
   // Mock 数据(暂无后端积分/头像接口):随机一次,保持本次会话稳定
   const [credits] = useState(() => 800 + Math.floor(Math.random() * 4200));
   const [avatar] = useState(() => {
@@ -47,17 +45,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     pathname === path || (path !== '/' && pathname.startsWith(path));
   const isCanvasWorkspace = pathname.startsWith('/generate/');
 
-  const handleNewProject = async () => {
-    if (creating) return;
-    setCreating(true);
-    try {
-      const project = await api.projects.create('未命名项目', '');
-      navigate(`/generate/${project.id}`);
-    } catch {
-      // surface failure silently for now; the project list stays reachable
-    } finally {
-      setCreating(false);
-    }
+  const handleNewProject = () => {
+    // 新建项目 → Brief 页(图四),解析后跳进无限画布
+    navigate('/new');
   };
 
   return (
@@ -108,16 +98,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               ))}
             </select>
 
-            {/* New project -> create an empty project, then open its canvas */}
+            {/* New project -> Brief 页(图四) */}
             <button
               onClick={handleNewProject}
-              disabled={creating}
-              className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-gradient-to-r from-orange-500 to-rose-500 text-[#fff] text-sm font-medium transition-transform hover:scale-[1.03] disabled:opacity-50"
+              className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-gradient-to-r from-orange-500 to-rose-500 text-[#fff] text-sm font-medium transition-transform hover:scale-[1.03]"
             >
               <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 5v14M5 12h14" />
               </svg>
-              {creating ? '创建中…' : '新建项目'}
+              新建项目
             </button>
 
             {/* Credits (no backend credits API yet — placeholder) */}

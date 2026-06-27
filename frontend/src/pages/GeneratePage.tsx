@@ -15,6 +15,7 @@ import CanvasView from '../components/CanvasView';
 import AIChatPanel from '../components/AIChatPanel';
 import LibraryPanel from '../components/LibraryPanel';
 import CopywritingPanel from '../components/CopywritingPanel';
+import AgentProgress from '../components/AgentProgress';
 import ThemeToggle, { useTheme } from '../components/ThemeToggle';
 import ModelPreferencePanel from '../components/model/ModelPreferencePanel';
 import { formatElapsedSeconds } from '../lib/elapsed';
@@ -88,11 +89,13 @@ export default function GeneratePage() {
     if (st.promptTemplate) {
       setPromptTemplate(st.promptTemplate);
     }
-    // Day 1: Read quick-mode prompt from router state (from + new on homepage)
-    if (st.quickMode && st.prompt) {
-      setQuickMode(true);
+    // Brief 页(图四)带入:始终预填 prompt;全自动模式才自动生成
+    if (st.prompt) {
       setQuickPrompt(st.prompt);
       if (st.brief) setQuickBrief(st.brief);
+    }
+    if (st.quickMode && st.prompt) {
+      setQuickMode(true);
       setViewMode('canvas');
       setPanelOpen(false);
       setRightPanel('chat');
@@ -450,7 +453,7 @@ export default function GeneratePage() {
               </div>
             )}
             {(quickMode || isGenerating) && !result ? (
-            <div className="w-full h-full">
+            <div className="relative w-full h-full">
               <CanvasView
                 isLight={isLight}
                 projectId={pid}
@@ -460,6 +463,12 @@ export default function GeneratePage() {
                 onAddToChat={addCanvasAssetToChat}
                 onEditPrompt={editPromptFromHistory}
               />
+              {/* B 联动:生成中在画布上浮层展示具名子 Agent 状态流 */}
+              {isGenerating && (
+                <div className="pointer-events-none absolute left-1/2 top-6 z-30 w-[min(92%,32rem)] -translate-x-1/2">
+                  <AgentProgress active={isGenerating} />
+                </div>
+              )}
             </div>
           ) : isGenerating && !result ? (
               <div className="h-full flex flex-col items-center justify-center gap-4">

@@ -16,6 +16,7 @@ import ProjectsLibraryPage from './pages/ProjectsLibraryPage';
 import BrandLibraryPage from './pages/BrandLibraryPage';
 import ProfilePage from './pages/ProfilePage';
 import CopywritingPage from './pages/CopywritingPage';
+import NewProjectPage from './pages/NewProjectPage';
 import Layout from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 const queryClient = new QueryClient();
@@ -33,6 +34,7 @@ export default function App() {
     <Route path='/brands' element={<RequireAuth><BrandLibraryPage /></RequireAuth>} />
     <Route path='/profile' element={<RequireAuth><ProfilePage /></RequireAuth>} />
     <Route path='/copywriting' element={<RequireAuth><CopywritingPage /></RequireAuth>} />
+    <Route path='/new' element={<RequireAuth><NewProjectPage /></RequireAuth>} />
     <Route path='/brand/:projectId' element={<RequireAuth><BrandPage /></RequireAuth>} />
     <Route path='*' element={<Navigate to='/' replace />} />
     <Route path='/campaign/:projectId' element={<RequireAuth><CampaignPage /></RequireAuth>} />
