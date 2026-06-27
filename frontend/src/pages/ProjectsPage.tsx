@@ -550,7 +550,7 @@ export default function ProjectsPage() {
           </div>
         )}
 
-                <div className="liquid-diamond-cluster relative h-[260px] w-[260px] sm:h-[300px] sm:w-[300px] mx-auto mt-2 mb-4">
+                <div className="liquid-diamond-cluster relative h-[260px] w-[260px] sm:h-[300px] sm:w-[300px] mx-auto mt-12 mb-4">
           {DIAMONDS.map((d, i) => (
             <button key={d.title} onClick={() => diamondAction(d.action)}
               className={`liquid-diamond group absolute flex h-[110px] w-[110px] rotate-45 items-center justify-center rounded-2xl text-gray-100 transition-all duration-500 hover:z-10 sm:h-[130px] sm:w-[130px] sm:rounded-[20px] backdrop-blur-xl bg-gradient-to-br from-white/[0.12] via-white/[0.06] to-white/[0.02] border border-white/[0.15] hover:border-orange-500/40 hover:from-orange-500/20 hover:via-white/[0.08] hover:to-transparent hover:shadow-[0_0_40px_rgba(251,146,60,0.25),inset_0_1px_0_0_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95 ${

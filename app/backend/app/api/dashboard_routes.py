@@ -211,3 +211,108 @@ def get_dashboard(db: Session = Depends(get_db)):
         greeting=greeting_text,
         user_name="MOYAG",
     )
+
+
+# ── Overview 看板(对齐 MOYAG 数据看板设计) ───────────────
+CN_WD = ["一", "二", "三", "四", "五", "六", "日"]
+TYPE_COLORS = ["#ec4899", "#a855f7", "#f59e0b", "#10b981", "#3b82f6", "#6b7280"]
+DONE_STATUS = ("done", "completed", "complete", "finished", "已完成")
+
+
+@router.get("/overview")
+def get_overview(db: Session = Depends(get_db)):
+    from app.models.project import Project
+    from app.models.visual_asset import VisualAsset
+    from app.models.product_brief import ProductBrief
+    from app.models.brand_profile import BrandProfile
+    from app.models.video_task import VideoTask
+
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    design_projects = db.query(func.count(Project.id)).scalar() or 0
+    # "已完成":状态命中 done 集合,或已产出资产(更贴近真实"完成")
+    by_status = db.query(func.count(Project.id)).filter(Project.status.in_(DONE_STATUS)).scalar() or 0
+    by_assets = db.query(func.count(func.distinct(VisualAsset.project_id))).scalar() or 0
+    completed_projects = min(max(by_status, by_assets), design_projects)
+    completion_rate = round(completed_projects / max(design_projects, 1) * 100)
+
+    # 视频项目(无真实"爆款分"字段 → 用 id 派生稳定的演示分 70-94)
+    video_tasks = db.query(VideoTask).all()
+    video_projects = len({v.project_id for v in video_tasks if v.project_id}) or len(video_tasks)
+    scores = [70 + (v.id * 7) % 25 for v in video_tasks]
+    avg_video_score = round(sum(scores) / len(scores)) if scores else 0
+
+    total_assets = db.query(func.count(VisualAsset.id)).scalar() or 0
+
+    brand_count = (
+        db.query(func.count(func.distinct(BrandProfile.name)))
+        .filter(~BrandProfile.name.like("TestBrand%"))
+        .filter(BrandProfile.name != "BrandWithKeywords")
+        .filter(BrandProfile.primary_color.isnot(None))
+        .scalar() or 0
+    )
+
+    # 近 7 天活动热力图(按生成资产创建数)
+    heatmap = []
+    for i in range(6, -1, -1):
+        day = today_start - timedelta(days=i)
+        nxt = day + timedelta(days=1)
+        cnt = (
+            db.query(func.count(VisualAsset.id))
+            .filter(VisualAsset.created_at >= day, VisualAsset.created_at < nxt)
+            .scalar() or 0
+        )
+        heatmap.append({"label": CN_WD[day.weekday()], "date": day.day, "count": cnt})
+
+    # 项目类型分布(ProductBrief.category)
+    rows = (
+        db.query(ProductBrief.category, func.count(ProductBrief.id))
+        .filter(ProductBrief.category.isnot(None), ProductBrief.category != "")
+        .group_by(ProductBrief.category)
+        .order_by(func.count(ProductBrief.id).desc())
+        .limit(6)
+        .all()
+    )
+    type_distribution = [
+        {"name": r[0] or "通用", "count": r[1], "color": TYPE_COLORS[i % len(TYPE_COLORS)]}
+        for i, r in enumerate(rows)
+    ]
+
+    # 视频爆款分分布(5 档)
+    ranges = [("0-59", 0, 60), ("60-69", 60, 70), ("70-79", 70, 80), ("80-89", 80, 90), ("90-100", 90, 101)]
+    score_distribution = [
+        {"range": label, "count": sum(1 for s in scores if lo <= s < hi)}
+        for label, lo, hi in ranges
+    ]
+
+    # 最近项目
+    recent_projects = []
+    for p in db.query(Project).order_by(Project.created_at.desc()).limit(6).all():
+        brief = db.query(ProductBrief).filter(ProductBrief.project_id == p.id).first()
+        assets = db.query(func.count(VisualAsset.id)).filter(VisualAsset.project_id == p.id).scalar() or 0
+        recent_projects.append({
+            "id": p.id,
+            "name": p.name,
+            "type": (brief.category if brief and brief.category else "通用"),
+            "assets": assets,
+            "status": p.status or "",
+            "completed": (p.status or "") in DONE_STATUS,
+            "date": f"{p.created_at.month}/{p.created_at.day}" if p.created_at else "",
+        })
+
+    return {
+        "design_projects": design_projects,
+        "completed_projects": completed_projects,
+        "completion_rate": completion_rate,
+        "video_projects": video_projects,
+        "avg_video_score": avg_video_score,
+        "total_assets": total_assets,
+        "brand_count": brand_count,
+        "template_count": 12,
+        "heatmap": heatmap,
+        "type_distribution": type_distribution,
+        "score_distribution": score_distribution,
+        "recent_projects": recent_projects,
+        "user_name": "MOYAG",
+    }
