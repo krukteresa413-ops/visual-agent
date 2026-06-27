@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../api/client';
 
 interface InspirationItem {
   id: number;
@@ -32,6 +34,7 @@ const CAT_ICONS: Record<string, string> = {
 };
 
 export default function InspirationPage() {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState<CategoryTree>({});
   const [items, setItems] = useState<InspirationItem[]>([]);
   const [activeCat, setActiveCat] = useState('');
@@ -96,17 +99,21 @@ export default function InspirationPage() {
     return p;
   };
 
-  const handleUseDirect = () => {
-    // TODO: 集成到生成流程
-    console.log('直接使用:', editPrompt);
-    alert('功能开发中：将跳转到生成页面');
+  const startWithPrompt = async (prompt: string) => {
+    try {
+      const project = await api.projects.create(
+        productName.trim() || selected?.sub_category || '灵感项目',
+        '',
+      );
+      navigate(`/generate/${project.id}`, { state: { quickMode: true, prompt } });
+    } catch {
+      navigate('/');
+    }
   };
 
-  const handleUseParameterized = () => {
-    // TODO: 集成到生成流程
-    console.log('参数化使用:', buildParameterizedPrompt());
-    alert('功能开发中：将跳转到生成页面');
-  };
+  const handleUseDirect = () => startWithPrompt(editPrompt);
+
+  const handleUseParameterized = () => startWithPrompt(buildParameterizedPrompt());
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
