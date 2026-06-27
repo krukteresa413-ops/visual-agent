@@ -20,7 +20,18 @@ async def test_copy_uses_llm(monkeypatch):
 
     monkeypatch.setattr(llm_client.LLMClient, "call", fake_call)
     out = await ten_agents.agent_copy(_ctx())
-    assert out == {"headline": "H", "body": "B", "cta": "C"}
+    assert out["headline"] == "H" and out["body"] == "B" and out["cta"] == "C"
+    assert out["source"] == "llm"
+
+
+@pytest.mark.asyncio
+async def test_copy_degrades_to_template_when_llm_unavailable(monkeypatch):
+    async def fake_resilient(*a, **k):
+        return {}
+    monkeypatch.setattr(ten_agents, "_call_llm_resilient", fake_resilient)
+    out = await ten_agents.agent_copy(_ctx())
+    assert out["source"] == "fallback"
+    assert out["headline"]  # 降级也保证非空
 
 
 @pytest.mark.asyncio
@@ -63,7 +74,20 @@ async def test_layout_returns_dict(monkeypatch):
 
     monkeypatch.setattr(la.LayoutAgent, "generate_layout", fake_layout)
     out = await ten_agents.agent_layout(_ctx())
-    assert out == {"sections": []}
+    assert out["sections"] == [] and out["source"] == "llm"
+
+
+@pytest.mark.asyncio
+async def test_layout_degrades_to_template_on_failure(monkeypatch):
+    from app.services import layout_agent as la
+
+    async def boom(self, **kw):
+        raise RuntimeError("gateway down")
+
+    monkeypatch.setattr(la.LayoutAgent, "generate_layout", boom)
+    out = await ten_agents.agent_layout(_ctx())
+    assert out["source"] == "fallback"
+    assert out["sections"]
 
 
 @pytest.mark.asyncio

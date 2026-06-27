@@ -1135,14 +1135,15 @@ async def generate_orchestrate(req: OrchestrateRequest):
 
     task_id = str(uuid.uuid4())
     _async_gen_tasks[task_id] = {"status": "processing"}
+    # 同步创建进度任务,避免前端订阅 SSE 时任务尚未建立(竞态 → 404 → 进度卡死)。
+    # total_steps≈每 Agent running+done 两事件 × 10。
+    progress = GenerationTracker.get().create(task_id, total_steps=20)
 
     async def _run_orchestration():
         try:
             from app.agents.orchestrator.pipeline import run_pipeline, build_generation_result
             from app.agents.orchestrator.ten_agents import build_default_agents
             start = time.time()
-            gt = GenerationTracker.get()
-            progress = gt.create(task_id, total_steps=10)
 
             async def on_progress(name, status="generating", msg=""):
                 await progress.step(name, status, msg)

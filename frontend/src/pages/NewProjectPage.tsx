@@ -182,7 +182,7 @@ export default function NewProjectPage() {
               <div className="flex flex-wrap gap-1.5">
                 {SUB_AGENTS.map((a) => <span key={a} className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11px] text-gray-300">{a}</span>)}
               </div>
-              <p className="mt-2 text-xs text-gray-500">10 个子 Agent 协作完成你的项目</p>
+              <p className="mt-2 text-xs text-gray-500">多个子 Agent 协作完成你的项目</p>
             </div>
             <div className="rounded-xl border border-orange-400/15 bg-orange-500/[0.06] p-3 text-xs leading-relaxed text-gray-400">
               <strong className="text-orange-200">提示</strong>：信息越完整，生成质量越高。Agent 会在下一步追问 1-3 个关键问题，你也可以直接「先帮我生成一版」。

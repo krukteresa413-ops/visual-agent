@@ -88,9 +88,41 @@ _COPY_SYSTEM = (
 _IMAGE_CHAIN = ("dataeyes", "mige", "pollinations", "local")
 
 
+async def _call_llm_resilient(system: str, user: str, *, temperature: float = 0.7,
+                              max_tokens: int = 512, per_try_timeout: float = 22.0) -> dict:
+    """主 provider(短超时)→ 备用 provider 回退;全失败返回 {}。
+
+    避免单个 LLM 网关 503/挂死把 Agent 拖到超时。每次尝试用 wait_for 限时,
+    取消底层(含其内部长重试)以快速失败。
+    """
+    import asyncio as _aio
+    # 1) 当前激活 provider(默认 DeepSeek)
+    try:
+        from app.services.llm_client import LLMClient
+        r = await _aio.wait_for(
+            LLMClient().call(system_prompt=system, user_prompt=user, temperature=temperature, max_tokens=max_tokens),
+            timeout=per_try_timeout,
+        )
+        if isinstance(r, dict) and r:
+            return r
+    except Exception:  # noqa: BLE001
+        pass
+    # 2) 备用 provider(OpenAI / gpt-4o),best-effort
+    try:
+        from app.services.llm_provider import OpenAIProvider
+        r = await _aio.wait_for(
+            OpenAIProvider().call(system_prompt=system, user_prompt=user, temperature=temperature, max_tokens=max_tokens),
+            timeout=per_try_timeout,
+        )
+        if isinstance(r, dict) and r:
+            return r
+    except Exception:  # noqa: BLE001
+        pass
+    return {}
+
+
 async def agent_copy(ctx: PipelineContext) -> dict:
-    """Copy:中文营销文案(LLM)。"""
-    from app.services.llm_client import LLMClient
+    """Copy:中文营销文案(LLM + 重试/备用回退,网关不可用时降级为模板)。"""
     b = ctx.brief
     tone = (ctx.results.get("brand") or {}).get("tone_of_voice") or "专业可信"
     sp = "、".join(b.get("selling_points", []) or [])
@@ -98,10 +130,12 @@ async def agent_copy(ctx: PipelineContext) -> dict:
         f"产品:{b.get('product_name', '')}\n卖点:{sp}\n"
         f"品牌调性:{tone}\n描述:{b.get('description', '')}"
     )
-    result = await LLMClient().call(system_prompt=_COPY_SYSTEM, user_prompt=user, temperature=0.7, max_tokens=512)
-    if not isinstance(result, dict):
-        result = {}
-    return {"headline": result.get("headline", ""), "body": result.get("body", ""), "cta": result.get("cta", "")}
+    result = await _call_llm_resilient(_COPY_SYSTEM, user, max_tokens=512)
+    if isinstance(result, dict) and (result.get("headline") or result.get("body")):
+        return {"headline": result.get("headline", ""), "body": result.get("body", ""), "cta": result.get("cta", ""), "source": "llm"}
+    # 降级:网关不可用时用模板,保证不空、不失败
+    name = b.get("product_name") or "本产品"
+    return {"headline": f"{name} 上新", "body": (sp or b.get("description", ""))[:50], "cta": "立即了解", "source": "fallback"}
 
 
 async def agent_image(ctx: PipelineContext) -> dict:
@@ -126,16 +160,28 @@ async def agent_image(ctx: PipelineContext) -> dict:
 
 
 async def agent_layout(ctx: PipelineContext) -> dict:
-    """Layout:中文排版布局(LLM)。"""
+    """Layout:中文排版布局(LLM,限时;网关不可用时降级为模板布局)。"""
+    import asyncio as _aio
     from app.services.layout_agent import LayoutAgent
     b = ctx.brief
     asset_plan = {"main_image": ctx.results.get("image", {})}
     platform_id = (b.get("platforms") or b.get("target_platforms") or [None])[0]
-    plan = await LayoutAgent().generate_layout(
-        project_id=ctx.project_id, brief=b, asset_plan=asset_plan,
-        platform_id=platform_id, brand_context=(ctx.results.get("brand") or {}).get("visual_style"),
-    )
-    return plan.model_dump() if hasattr(plan, "model_dump") else dict(plan)
+    try:
+        plan = await _aio.wait_for(LayoutAgent().generate_layout(
+            project_id=ctx.project_id, brief=b, asset_plan=asset_plan,
+            platform_id=platform_id, brand_context=(ctx.results.get("brand") or {}).get("visual_style"),
+        ), timeout=25.0)
+        out = plan.model_dump() if hasattr(plan, "model_dump") else dict(plan)
+        out["source"] = "llm"
+        return out
+    except Exception:  # noqa: BLE001 — 降级为简单模板布局
+        return {
+            "source": "fallback",
+            "sections": [
+                {"type": "hero", "content": b.get("product_name", "")},
+                {"type": "points", "content": b.get("selling_points", []) or []},
+            ],
+        }
 
 
 async def agent_mockup(ctx: PipelineContext) -> dict:
