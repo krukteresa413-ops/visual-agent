@@ -27,6 +27,9 @@ export default function StrategyPanel({ strategy, onConfirm, onRetry, loading }:
   return (
     <div className="liquid-card p-6 w-full max-w-xl mx-auto space-y-5">
       <div className="text-center space-y-1">
+        <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-orange-400/20 bg-orange-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-orange-200/90">
+          创意策略
+        </div>
         <div className="text-orange-400 text-2xl">💡</div>
         <h3 className="text-sm font-medium text-gray-100">AI 创意策略</h3>
         <p className="text-xs text-gray-500">

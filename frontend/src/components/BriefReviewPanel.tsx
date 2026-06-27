@@ -78,9 +78,14 @@ export default function BriefReviewPanel({ brief, onConfirm, onReupload }: Props
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">📋</span>
-        <h2 className="text-xl font-semibold text-white">解析产品信息如下，如有空缺请补充</h2>
+      <div>
+        <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-400/20 bg-orange-500/10 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-orange-200/90">
+          Brief 确认
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">📋</span>
+          <h2 className="text-xl font-semibold text-white">解析产品信息如下，如有空缺请补充</h2>
+        </div>
       </div>
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
