@@ -614,7 +614,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
               <div className="fixed inset-0 z-20" onClick={() => setShowSkills(false)} />
               <div className="absolute bottom-full left-0 z-30 mb-2 w-80">
                 <SkillsPopup
-                  isLight={isLight}
+                  isLight={!!isLight}
                   onClose={() => setShowSkills(false)}
                   onSelectSkill={(p) => { setInput((prev) => (prev ? prev + '\n' + p : p)); setShowSkills(false); }}
                 />
