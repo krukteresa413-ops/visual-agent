@@ -296,6 +296,10 @@ def list_brands(db: Session = Depends(get_db), tenant_id: Optional[int] = None):
     q = db.query(BrandProfile)
     if tid is not None:
         q = q.filter(BrandProfile.tenant_id == tid)
+    # 展示用:隐藏自动化测试脏数据,仅展示有主色的完整真实品牌(不删除底层数据)
+    q = q.filter(~BrandProfile.name.like("TestBrand%"))
+    q = q.filter(BrandProfile.name != "BrandWithKeywords")
+    q = q.filter(BrandProfile.primary_color.isnot(None))
     rows = q.order_by(BrandProfile.updated_at.desc()).all()
     seen: dict = {}
     for r in rows:
