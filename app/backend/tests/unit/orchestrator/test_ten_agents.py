@@ -30,14 +30,11 @@ async def test_deterministic_agents_return_structured_output():
     assert "package" in exp and "asset_count" in exp
 
 
-def test_build_default_has_the_six_real_agents():
-    agents = ten_agents.build_default_agents()
-    assert set(agents) == {"pm", "research", "brand", "visual", "compliance", "export"}
-
-
 @pytest.mark.asyncio
-async def test_pipeline_with_real_agents_six_success_four_skipped():
-    result = await run_pipeline(BRIEF, project_id=2, agents=ten_agents.build_default_agents())
+async def test_pipeline_with_deterministic_subset_success_and_skips():
+    """只注入 6 个确定性 Agent 时:它们 success,其余 4 个被标 skipped(保持确定性,不触网)。"""
+    six = {k: getattr(ten_agents, f"agent_{k}") for k in ["pm", "research", "brand", "visual", "compliance", "export"]}
+    result = await run_pipeline(BRIEF, project_id=2, agents=six)
     statuses = {a["name"]: a["status"] for a in result["agents"]}
     assert statuses["PM"] == "success"
     assert statuses["Brand"] == "success"

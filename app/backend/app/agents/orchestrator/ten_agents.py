@@ -78,13 +78,96 @@ async def agent_export(ctx: PipelineContext) -> dict:
     return {"package": package, "asset_count": len(assets)}
 
 
+_COPY_SYSTEM = (
+    "你是中文营销文案专家。根据产品信息生成一组营销文案,返回纯 JSON(不要代码块):\n"
+    '{"headline":"主标题","body":"正文(50字内)","cta":"行动号召"}\n'
+    "要求:符合中国广告法,不使用极限词。"
+)
+
+# Image / Mockup 渲染的 provider 自动回退链(与 quick-generate 一致)
+_IMAGE_CHAIN = ("dataeyes", "mige", "pollinations", "local")
+
+
+async def agent_copy(ctx: PipelineContext) -> dict:
+    """Copy:中文营销文案(LLM)。"""
+    from app.services.llm_client import LLMClient
+    b = ctx.brief
+    tone = (ctx.results.get("brand") or {}).get("tone_of_voice") or "专业可信"
+    sp = "、".join(b.get("selling_points", []) or [])
+    user = (
+        f"产品:{b.get('product_name', '')}\n卖点:{sp}\n"
+        f"品牌调性:{tone}\n描述:{b.get('description', '')}"
+    )
+    result = await LLMClient().call(system_prompt=_COPY_SYSTEM, user_prompt=user, temperature=0.7, max_tokens=512)
+    if not isinstance(result, dict):
+        result = {}
+    return {"headline": result.get("headline", ""), "body": result.get("body", ""), "cta": result.get("cta", "")}
+
+
+async def agent_image(ctx: PipelineContext) -> dict:
+    """Image:渲染主视觉(provider 自动回退)。"""
+    from app.models.image_generation_model import ImageGenerationRequest
+    from app.services.image_generation_service import image_generation_service
+    b = ctx.brief
+    moodboard = (ctx.results.get("visual") or {}).get("moodboard", "")
+    sp = ", ".join(b.get("selling_points", []) or [])
+    prompt = f"{b.get('product_name', '产品')} {sp}\n{moodboard}".strip()
+    last_err = None
+    for prov in _IMAGE_CHAIN:
+        try:
+            r = await image_generation_service.generate(ImageGenerationRequest(provider=prov, model=None, prompt=prompt, width=1024, height=1024))
+            img = r.images[0] if getattr(r, "images", None) else None
+            if img and img.url:
+                return {"url": img.url, "provider": getattr(r, "provider", prov), "width": img.width, "height": img.height, "prompt": prompt}
+        except Exception as e:  # noqa: BLE001 — 回退下一个 provider
+            last_err = e
+            continue
+    raise RuntimeError(f"image agent 所有 provider 失败: {last_err}")
+
+
+async def agent_layout(ctx: PipelineContext) -> dict:
+    """Layout:中文排版布局(LLM)。"""
+    from app.services.layout_agent import LayoutAgent
+    b = ctx.brief
+    asset_plan = {"main_image": ctx.results.get("image", {})}
+    platform_id = (b.get("platforms") or b.get("target_platforms") or [None])[0]
+    plan = await LayoutAgent().generate_layout(
+        project_id=ctx.project_id, brief=b, asset_plan=asset_plan,
+        platform_id=platform_id, brand_context=(ctx.results.get("brand") or {}).get("visual_style"),
+    )
+    return plan.model_dump() if hasattr(plan, "model_dump") else dict(plan)
+
+
+async def agent_mockup(ctx: PipelineContext) -> dict:
+    """Mockup:将主视觉套用到真实场景 mockup(渲染)。"""
+    from app.services.mockup_agent import MockupAgent, MOCKUP_TYPES
+    from app.models.image_generation_model import ImageGenerationRequest
+    from app.services.image_generation_service import image_generation_service
+    b = ctx.brief
+    img = ctx.results.get("image") or {}
+    mtype = MOCKUP_TYPES[0]["id"] if MOCKUP_TYPES else "phone"
+    req = MockupAgent().build_request(mtype, b.get("product_name", "产品"), img.get("url"))
+    url = None
+    try:
+        r = await image_generation_service.generate(ImageGenerationRequest(provider="dataeyes", model=None, prompt=req["prompt"], width=1024, height=1024))
+        mi = r.images[0] if getattr(r, "images", None) else None
+        url = mi.url if mi else None
+    except Exception:  # noqa: BLE001 — mockup 渲染失败不致命,保留 request
+        url = None
+    return {"mockup_type": mtype, "request": req, "url": url}
+
+
 def build_default_agents() -> Dict[str, Agent]:
-    """已接入的真实 Agent。未列出的(copy/image/layout/mockup)由 pipeline 标 skipped。"""
+    """全部 10 个真实 Agent。"""
     return {
         "pm": agent_pm,
         "research": agent_research,
         "brand": agent_brand,
+        "copy": agent_copy,
         "visual": agent_visual,
+        "image": agent_image,
+        "layout": agent_layout,
+        "mockup": agent_mockup,
         "compliance": agent_compliance,
         "export": agent_export,
     }
