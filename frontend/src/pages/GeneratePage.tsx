@@ -15,7 +15,6 @@ import CanvasView from '../components/CanvasView';
 import AIChatPanel from '../components/AIChatPanel';
 import LibraryPanel from '../components/LibraryPanel';
 import CopywritingPanel from '../components/CopywritingPanel';
-import AgentProgress from '../components/AgentProgress';
 import ThemeToggle, { useTheme } from '../components/ThemeToggle';
 import ModelPreferencePanel from '../components/model/ModelPreferencePanel';
 import { formatElapsedSeconds } from '../lib/elapsed';
@@ -177,7 +176,8 @@ export default function GeneratePage() {
         prompt_template: promptTemplate || undefined,
         brief: quickBrief || undefined,
         reference_image_url: refImage?.url || undefined,  // Day 3.3
-        image_provider: 'dataeyes',
+        // 不再写死 provider:让后端自动路由 + 失败回退(dataeyes→mige→pollinations→local)
+        image_provider: autoModel ? undefined : 'dataeyes',
         image_model: autoModel ? undefined : selectedImageModel || undefined,
         auto_model: autoModel,
       });
@@ -453,7 +453,7 @@ export default function GeneratePage() {
               </div>
             )}
             {(quickMode || isGenerating) && !result ? (
-            <div className="relative w-full h-full">
+            <div className="w-full h-full">
               <CanvasView
                 isLight={isLight}
                 projectId={pid}
@@ -463,12 +463,6 @@ export default function GeneratePage() {
                 onAddToChat={addCanvasAssetToChat}
                 onEditPrompt={editPromptFromHistory}
               />
-              {/* B 联动:生成中在画布上浮层展示具名子 Agent 状态流 */}
-              {isGenerating && (
-                <div className="pointer-events-none absolute left-1/2 top-6 z-30 w-[min(92%,32rem)] -translate-x-1/2">
-                  <AgentProgress active={isGenerating} />
-                </div>
-              )}
             </div>
           ) : isGenerating && !result ? (
               <div className="h-full flex flex-col items-center justify-center gap-4">

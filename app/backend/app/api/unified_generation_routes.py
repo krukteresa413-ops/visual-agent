@@ -366,16 +366,41 @@ async def _quick_generate_image_asset(req, brief: dict) -> dict:
     brand_context = (brief or {}).get("_brand_context")
     if brand_context:
         prompt = f"{prompt}\n{brand_context}"
-    image_result = await image_generation_service.generate(ImageGenerationRequest(
-        provider=req.image_provider or "dataeyes",
-        model=None if req.auto_model else req.image_model,
-        prompt=prompt,
-        width=1024,
-        height=1024,
-    ))
-    image = image_result.images[0] if image_result.images else None
+    # 自动路由 + 失败回退:依次尝试 provider 链,任一成功即返回;最终回退 local 占位,保证不卡死/不 502
+    chain: list[str] = []
+    if req.image_provider:
+        chain.append(req.image_provider)
+    for p in ("dataeyes", "mige", "pollinations", "local"):
+        if p not in chain:
+            chain.append(p)
+
+    image_result = None
+    image = None
+    last_err = None
+    for prov in chain:
+        try:
+            image_result = await image_generation_service.generate(ImageGenerationRequest(
+                provider=prov,
+                model=None if req.auto_model else req.image_model,
+                prompt=prompt,
+                width=1024,
+                height=1024,
+            ))
+            image = image_result.images[0] if (image_result and image_result.images) else None
+            if image is not None and image.url:
+                if prov != chain[0]:
+                    logger.warning("quick image fallback: %s -> %s", chain[0], prov)
+                break
+            image = None
+        except Exception as e:  # noqa: BLE001 — 回退到下一个 provider
+            last_err = e
+            logger.warning("quick image provider %s failed: %s", prov, e)
+            image_result = None
+            image = None
+            continue
+
     if image is None or not image.url:
-        raise HTTPException(status_code=502, detail="图片生成失败：provider 未返回 url")
+        raise HTTPException(status_code=502, detail=f"图片生成失败：所有 provider 均未返回 url（尝试 {chain}，最后错误：{last_err}）")
 
     provider_raw = image_result.raw or {}
     requested_model = provider_raw.get("requested_model") or (None if req.auto_model else req.image_model) or "gemini-2.5-flash-image"
