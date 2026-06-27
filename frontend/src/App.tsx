@@ -12,6 +12,9 @@ import PromptLibrary from './pages/PromptLibrary';
 import VideoEditPage from './pages/VideoEditPage';
 import InspirationPage from './pages/InspirationPage';
 import BrandPage from './pages/BrandPage';
+import ProjectsLibraryPage from './pages/ProjectsLibraryPage';
+import BrandLibraryPage from './pages/BrandLibraryPage';
+import ProfilePage from './pages/ProfilePage';
 import Layout from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 const queryClient = new QueryClient();
@@ -25,6 +28,9 @@ export default function App() {
     <Route path='/video-edit' element={<RequireAuth><VideoEditPage /></RequireAuth>} />
     <Route path='/prompts' element={<RequireAuth><PromptLibrary /></RequireAuth>} />
     <Route path='/inspiration' element={<RequireAuth><InspirationPage /></RequireAuth>} />
+    <Route path='/projects' element={<RequireAuth><ProjectsLibraryPage /></RequireAuth>} />
+    <Route path='/brands' element={<RequireAuth><BrandLibraryPage /></RequireAuth>} />
+    <Route path='/profile' element={<RequireAuth><ProfilePage /></RequireAuth>} />
     <Route path='/brand/:projectId' element={<RequireAuth><BrandPage /></RequireAuth>} />
     <Route path='*' element={<Navigate to='/' replace />} />
     <Route path='/campaign/:projectId' element={<RequireAuth><CampaignPage /></RequireAuth>} />

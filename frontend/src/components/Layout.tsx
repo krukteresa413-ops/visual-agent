@@ -11,10 +11,11 @@ import { api } from '../api/client';
 
 const NAV = [
   { to: '/', label: '首页' },
+  { to: '/projects', label: '项目库' },
+  { to: '/brands', label: '品牌库' },
   { to: '/prompts', label: '创意脚本库' },
   { to: '/inspiration', label: '灵感源' },
-  { to: '/history', label: '历史' },
-  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/profile', label: '个人中心' },
 ];
 
 export default function Layout({ children }: { children: React.ReactNode }) {
