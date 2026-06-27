@@ -275,6 +275,15 @@ export const api = {
       client.get(`/brand/${projectId}`).then(r => r.data),
     create: (params: Record<string, unknown>) =>
       client.post('/brand/', params).then(r => r.data),
+    // 多品牌库管理(/brand/manage/*)
+    list: () =>
+      client.get('/brand/manage/list').then(r => r.data),
+    createManual: (params: Record<string, unknown>) =>
+      client.post('/brand/manage/create', params).then(r => r.data),
+    update: (id: number, params: Record<string, unknown>) =>
+      client.patch(`/brand/manage/${id}`, params).then(r => r.data),
+    remove: (id: number) =>
+      client.delete(`/brand/manage/${id}`).then(r => r.data),
   },
 
   // Export

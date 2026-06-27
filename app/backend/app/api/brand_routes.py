@@ -244,3 +244,116 @@ def get_brand_kit(project_id: int, db: Session = Depends(get_db)):
         brand_story=p.brand_story if hasattr(p, "brand_story") else None,
     )
     return {"brand_kit": kit.model_dump()}
+
+
+# ── multi-brand library management (NEW) ──────────────
+# 路由放在 /manage/* 二级路径下,避免与单段 /{project_id} 冲突
+from app.models.auth import Tenant
+
+
+def _default_tenant_id(db: Session) -> Optional[int]:
+    t = db.query(Tenant).filter(Tenant.slug == "muyuanjia").first()
+    return t.id if t else None
+
+
+def _brand_to_dict(p) -> dict:
+    return {
+        "id": p.id,
+        "tenant_id": p.tenant_id,
+        "project_id": p.project_id,
+        "is_canonical": bool(p.is_canonical),
+        "name": p.name,
+        "primary_color": p.primary_color,
+        "secondary_color": p.secondary_color,
+        "accent_color": p.accent_color,
+        "font_style": p.font_style,
+        "tone_of_voice": p.tone_of_voice,
+        "visual_keywords": p.visual_keywords_list,
+        "forbidden_words": p.forbidden_words_list,
+        "logo_url": p.logo_url,
+        "tagline": p.tagline,
+        "updated_at": p.updated_at.isoformat() if p.updated_at else None,
+    }
+
+
+class BrandManualInput(BaseModel):
+    name: str
+    primary_color: Optional[str] = None
+    secondary_color: Optional[str] = None
+    accent_color: Optional[str] = None
+    font_style: Optional[str] = None
+    tone_of_voice: Optional[str] = None
+    visual_keywords: Optional[list[str]] = None
+    forbidden_words: Optional[list[str]] = None
+    tagline: Optional[str] = None
+
+
+@router.get("/manage/list")
+def list_brands(db: Session = Depends(get_db), tenant_id: Optional[int] = None):
+    """列出当前租户的品牌(按名称去重,保留最近更新的一条)。"""
+    from app.models.brand_profile import BrandProfile
+    tid = tenant_id if tenant_id is not None else _default_tenant_id(db)
+    q = db.query(BrandProfile)
+    if tid is not None:
+        q = q.filter(BrandProfile.tenant_id == tid)
+    rows = q.order_by(BrandProfile.updated_at.desc()).all()
+    seen: dict = {}
+    for r in rows:
+        key = (r.name or "").strip().lower()
+        if key and key not in seen:
+            seen[key] = r
+    return {"brands": [_brand_to_dict(r) for r in seen.values()]}
+
+
+@router.post("/manage/create")
+def create_brand_manual(req: BrandManualInput, db: Session = Depends(get_db)):
+    from app.models.brand_profile import BrandProfile
+    if not req.name.strip():
+        raise HTTPException(status_code=400, detail="品牌名不能为空")
+    p = BrandProfile(
+        tenant_id=_default_tenant_id(db),
+        name=req.name.strip(),
+        primary_color=req.primary_color,
+        secondary_color=req.secondary_color,
+        accent_color=req.accent_color,
+        font_style=req.font_style,
+        tone_of_voice=req.tone_of_voice,
+        visual_keywords=json.dumps(req.visual_keywords or [], ensure_ascii=False),
+        forbidden_words=json.dumps(req.forbidden_words or [], ensure_ascii=False),
+        tagline=req.tagline,
+    )
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return _brand_to_dict(p)
+
+
+@router.patch("/manage/{brand_id}")
+def update_brand_manual(brand_id: int, req: BrandManualInput, db: Session = Depends(get_db)):
+    from app.models.brand_profile import BrandProfile
+    p = db.query(BrandProfile).filter(BrandProfile.id == brand_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="品牌不存在")
+    p.name = req.name.strip() or p.name
+    p.primary_color = req.primary_color
+    p.secondary_color = req.secondary_color
+    p.accent_color = req.accent_color
+    p.font_style = req.font_style
+    p.tone_of_voice = req.tone_of_voice
+    p.visual_keywords = json.dumps(req.visual_keywords or [], ensure_ascii=False)
+    p.forbidden_words = json.dumps(req.forbidden_words or [], ensure_ascii=False)
+    p.tagline = req.tagline
+    db.commit()
+    db.refresh(p)
+    return _brand_to_dict(p)
+
+
+@router.delete("/manage/{brand_id}")
+def delete_brand_manual(brand_id: int, db: Session = Depends(get_db)):
+    from app.models.brand_profile import BrandProfile
+    p = db.query(BrandProfile).filter(BrandProfile.id == brand_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="品牌不存在")
+    db.delete(p)
+    db.commit()
+    return {"ok": True, "id": brand_id}
