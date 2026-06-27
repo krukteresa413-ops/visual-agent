@@ -64,7 +64,7 @@ export default function DashboardPage() {
   const maxDist = Math.max(...dd.type_distribution.map((d: DistributionItem) => d.count), 1);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a14] via-[#0f0f1e] to-[#0a0a14] text-white">
+    <div className="liquid-page min-h-screen text-white">
       {/* Header */}
       <header className="px-6 pt-6 pb-2">
         <h1 className="text-xl font-bold">

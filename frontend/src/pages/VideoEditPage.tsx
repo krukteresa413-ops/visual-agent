@@ -103,8 +103,8 @@ export default function VideoEditPage() {
   );
 
   return (
-    <div className="min-h-screen bg-black text-gray-100">
-      <header className="sticky top-0 z-10 px-6 py-2 flex items-center justify-between bg-black/80 backdrop-blur border-b border-white/[0.06]">
+    <div className="liquid-page min-h-screen text-gray-100">
+      <header className="sticky top-0 z-10 px-6 py-2 flex items-center justify-between bg-white/5 backdrop-blur border-b border-white/[0.06]">
         <div className="flex items-center gap-3">
           <Link to="/" className="text-gray-500 hover:text-white transition-colors text-sm">← 返回</Link>
           <span className="text-white/20">|</span>

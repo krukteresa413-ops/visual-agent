@@ -26,6 +26,16 @@ const QUICK_ENTRIES = [
   { to: '/video-edit', icon: '⚡', title: '视频剪辑', desc: '上传视频自动剪成短视频' },
 ];
 
+// 打字机占位:每轮内容不同,均与 MOYAG 营销设计场景相关
+const PLACEHOLDER_PHRASES = [
+  '帮我给一款 299 元女士防晒衣做一套淘宝 + 小红书上新素材',
+  '我是深圳一家日式拉面店,周末第二碗半价,做小红书 + 朋友圈 + 门店立牌',
+  '生成一张 300L 商用冷柜的电商主图,主打快速制冷、节能 R290',
+  '为国产香氛品牌做一套东方松弛高级的品牌视觉系统',
+  '做 30 张「职场女性成长」主题的小红书封面模板',
+  '上传产品手册,自动提取卖点并生成全套多平台营销资产',
+];
+
 const PROJECT_COVER_GRADIENTS = [
   'from-orange-500/30 via-rose-400/14 to-white/[0.03]',
   'from-sky-400/22 via-orange-400/12 to-white/[0.03]',
@@ -182,6 +192,21 @@ export default function ProjectsPage() {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [taskText, setTaskText] = useState('');
+  const [typedPh, setTypedPh] = useState('');
+  useEffect(() => {
+    let i = 0, c = 0, del = false;
+    let t: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const full = PLACEHOLDER_PHRASES[i];
+      c += del ? -1 : 1;
+      setTypedPh(full.slice(0, c));
+      if (!del && c === full.length) { del = true; t = setTimeout(tick, 1800); return; }
+      if (del && c === 0) { del = false; i = (i + 1) % PLACEHOLDER_PHRASES.length; t = setTimeout(tick, 350); return; }
+      t = setTimeout(tick, del ? 30 : 65);
+    };
+    t = setTimeout(tick, 500);
+    return () => clearTimeout(t);
+  }, []);
   const [uploading, setUploading] = useState(false);
 
   const [reviewQuestions, setReviewQuestions] = useState<Array<{field:string;level:string;question:string;hint:string}>>([]);
@@ -452,7 +477,7 @@ export default function ProjectsPage() {
               </div>
               <textarea
                 className="w-full bg-white/[0.04] rounded-xl px-3 py-2 text-[14px] text-gray-100 placeholder:text-gray-600/50 resize-none focus:outline-none focus:bg-white/[0.06] focus:ring-2 focus:ring-orange-500/20 min-h-[80px] leading-relaxed border border-white/[0.08] transition-all duration-500 focus:shadow-[0_0_20px_rgba(251,146,60,0.08),inset_0_1px_0_0_rgba(255,255,255,0.06)] focus:border-orange-500/30"
-                placeholder="输入产品描述，例如：300L商用冷柜，不锈钢外壳，快速制冷，节能R290制冷剂，目标市场欧美中东..."
+                placeholder={(typedPh || '输入产品描述') + '▋'}
                 value={taskText}
                 onChange={e => setTaskText(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleText(); } }} />
@@ -494,6 +519,26 @@ export default function ProjectsPage() {
           </div>
         )}
 
+        {/* 快捷工具入口(对话框下方) */}
+        <div className="mx-auto mt-3 grid w-full max-w-2xl grid-cols-1 gap-3 px-4 sm:grid-cols-3">
+          {QUICK_ENTRIES.map((e) => (
+            <button
+              key={e.to}
+              onClick={() => navigate(e.to)}
+              className="group flex items-center gap-3 rounded-2xl border border-white/[0.12] bg-white/[0.05] p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-orange-400/45 hover:bg-white/[0.08] hover:shadow-[0_18px_50px_rgba(251,146,60,0.14)]"
+            >
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-orange-500/25 to-rose-500/20 text-lg">{e.icon}</span>
+              <span className="min-w-0">
+                <span className="flex items-center gap-1 text-sm font-semibold text-white">
+                  {e.title}
+                  <span className="text-orange-300 opacity-0 transition-opacity duration-300 group-hover:opacity-100">→</span>
+                </span>
+                <span className="block truncate text-[11px] text-gray-500">{e.desc}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+
         {strategyData && reviewBrief && (
           <div className="mb-3 w-full">
             <StrategyPanel
@@ -529,26 +574,6 @@ export default function ProjectsPage() {
               <span className="text-[10px] sm:text-[11px] font-semibold text-white/80 group-hover:text-white whitespace-nowrap">新建</span>
             </span>
           </button>
-        </div>
-
-        {/* 快捷工具入口 */}
-        <div className="mx-auto mt-2 grid w-full max-w-3xl grid-cols-1 gap-3 px-4 pb-6 sm:grid-cols-3">
-          {QUICK_ENTRIES.map((e) => (
-            <button
-              key={e.to}
-              onClick={() => navigate(e.to)}
-              className="group flex items-center gap-3 rounded-2xl border border-white/[0.12] bg-white/[0.05] p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-orange-400/45 hover:bg-white/[0.08] hover:shadow-[0_18px_50px_rgba(251,146,60,0.14)]"
-            >
-              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-orange-500/25 to-rose-500/20 text-lg">{e.icon}</span>
-              <span className="min-w-0">
-                <span className="flex items-center gap-1 text-sm font-semibold text-white">
-                  {e.title}
-                  <span className="text-orange-300 opacity-0 transition-opacity duration-300 group-hover:opacity-100">→</span>
-                </span>
-                <span className="block truncate text-[11px] text-gray-500">{e.desc}</span>
-              </span>
-            </button>
-          ))}
         </div>
       </main>
       )}
