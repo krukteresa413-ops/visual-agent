@@ -1102,3 +1102,82 @@ async def quick_generate(req: QuickGenerateRequest):
 
     asyncio.create_task(_run_generation())
     return {"task_id": task_id, "status": "processing"}
+
+
+class OrchestrateRequest(BaseModel):
+    prompt: str | None = None
+    project_id: int = 2
+    brief: dict | None = None
+    platforms: list[str] | None = None
+
+
+@router.post("/generate/orchestrate")
+async def generate_orchestrate(req: OrchestrateRequest):
+    """真·十 Agent 编排:PM→Research→Brand→Copy→Visual→Image→Layout→Mockup→Compliance→Export。
+    每个 Agent 通过 GenerationTracker SSE 上报具名进度;图片/Mockup 产物落库到画布。返回 task_id 轮询。
+    """
+    if not (req.prompt and req.prompt.strip()) and not req.brief:
+        raise HTTPException(status_code=400, detail="请提供 prompt 或 brief")
+
+    if req.brief:
+        brief = dict(req.brief)
+    else:
+        brief = {
+            "product_name": req.prompt[:50],
+            "category": "未分类",
+            "selling_points": [req.prompt],
+            "description": req.prompt,
+        }
+    if req.platforms:
+        brief["platforms"] = req.platforms
+    if req.prompt:
+        brief.setdefault("description", req.prompt)
+
+    task_id = str(uuid.uuid4())
+    _async_gen_tasks[task_id] = {"status": "processing"}
+
+    async def _run_orchestration():
+        try:
+            from app.agents.orchestrator.pipeline import run_pipeline, build_generation_result
+            from app.agents.orchestrator.ten_agents import build_default_agents
+            start = time.time()
+            gt = GenerationTracker.get()
+            progress = gt.create(task_id, total_steps=10)
+
+            async def on_progress(name, status="generating", msg=""):
+                await progress.step(name, status, msg)
+
+            result = await run_pipeline(
+                brief, req.project_id, progress_callback=on_progress,
+                agents=build_default_agents(), timeout_seconds=45.0,
+            )
+            gen_result = build_generation_result(brief, result.get("results", {}))
+            elapsed = int(time.time() - start)
+
+            try:
+                from app.db.session import SessionLocal
+                from app.db.crud_visual_asset_v2 import save_asset_plan
+                db = SessionLocal()
+                save_asset_plan(
+                    db=db, project_id=req.project_id, asset_plan=gen_result,
+                    model_used=(gen_result.get("main_image") or {}).get("model") or "orchestrator",
+                    generation_seconds=elapsed,
+                )
+                _ensure_canvas_image_elements(db, req.project_id, gen_result)
+                db.close()
+            except Exception:
+                pass
+
+            await progress.done({"elapsed_seconds": elapsed})
+            _async_gen_tasks[task_id] = {
+                "status": "complete",
+                "parsed_brief": brief,
+                "generation": gen_result,
+                "agents": result.get("agents", []),
+                "elapsed_seconds": elapsed,
+            }
+        except Exception as e:
+            _async_gen_tasks[task_id] = {"status": "error", "error": str(e) or e.__class__.__name__}
+
+    asyncio.create_task(_run_orchestration())
+    return {"task_id": task_id, "status": "processing"}

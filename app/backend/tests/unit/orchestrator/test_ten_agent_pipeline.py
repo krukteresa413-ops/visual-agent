@@ -1,7 +1,7 @@
 """TDD: 十 Agent 顺序编排核心(机制层,与具体 Agent 实现解耦)。"""
 import pytest
 
-from app.agents.orchestrator.pipeline import run_pipeline, AGENT_SEQUENCE
+from app.agents.orchestrator.pipeline import run_pipeline, AGENT_SEQUENCE, build_generation_result
 
 EXPECTED_KEYS = ["pm", "research", "brand", "copy", "visual", "image", "layout", "mockup", "compliance", "export"]
 EXPECTED_NAMES = ["PM", "Research", "Brand", "Copy", "Visual", "Image", "Layout", "Mockup", "Compliance", "Export"]
@@ -64,6 +64,30 @@ async def test_failed_agent_is_marked_and_pipeline_continues():
 
 
 @pytest.mark.asyncio
+async def test_slow_agent_times_out_and_pipeline_continues():
+    import asyncio
+
+    async def slow(ctx):
+        await asyncio.sleep(5)
+        return {}
+
+    async def ok(ctx):
+        return {"ok": True}
+
+    agents = {k: (slow if k == "layout" else ok) for k, _ in AGENT_SEQUENCE}
+    events = []
+
+    async def progress(label, status, message=""):
+        events.append((label, status))
+
+    result = await run_pipeline({}, 2, progress_callback=progress, agents=agents, timeout_seconds=0.05)
+    statuses = {a["name"]: a["status"] for a in result["agents"]}
+    assert statuses["Layout"] == "failed"  # 超时被标失败
+    assert statuses["Export"] == "success"  # 超时后继续
+    assert ("Layout", "failed") in events
+
+
+@pytest.mark.asyncio
 async def test_missing_agent_is_skipped_not_crash():
     async def ok(ctx):
         return {"ok": True}
@@ -75,3 +99,22 @@ async def test_missing_agent_is_skipped_not_crash():
     assert statuses["PM"] == "success"
     assert statuses["Mockup"] == "skipped"
     assert len(result["agents"]) == 10
+
+
+def test_build_generation_result_maps_assets():
+    results = {
+        "image": {"url": "/uploads/a.png", "width": 1024, "height": 1024, "provider": "dataeyes"},
+        "mockup": {"url": "/uploads/m.png"},
+        "copy": {"headline": "标题", "body": "正文", "cta": "立即购买"},
+    }
+    gen = build_generation_result({"product_name": "X"}, results)
+    assert gen["main_image"]["url"] == "/uploads/a.png"
+    assert gen["scene_images"][0]["url"] == "/uploads/m.png"
+    assert gen["selling_points"][0]["point"] == "标题"
+    assert gen["ad_material"]["cta"] == "立即购买"
+
+
+def test_build_generation_result_handles_empty():
+    gen = build_generation_result({}, {})
+    assert gen["main_image"] is None
+    assert gen["scene_images"] == []

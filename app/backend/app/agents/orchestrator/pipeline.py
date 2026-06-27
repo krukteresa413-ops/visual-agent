@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable, Dict, Optional
 
@@ -44,8 +45,13 @@ async def run_pipeline(
     project_id: int,
     progress_callback: Optional[ProgressCallback] = None,
     agents: Optional[Dict[str, Agent]] = None,
+    timeout_seconds: float = 90.0,
 ) -> dict:
-    """顺序运行十 Agent。返回 {"agents": [{key,name,status,error?}], "results": {key: output}}。"""
+    """顺序运行十 Agent。返回 {"agents": [{key,name,status,error?}], "results": {key: output}}。
+
+    单个 Agent 失败或超时(timeout_seconds)只标记该 Agent,不中断整条流水线,避免某个
+    挂死的 LLM/渲染调用拖垮全流程。
+    """
     progress = progress_callback or _noop_progress
     registry = agents if agents is not None else _default_agents()
     ctx = PipelineContext(brief=brief or {}, project_id=project_id)
@@ -59,15 +65,62 @@ async def run_pipeline(
             continue
         await progress(name, "running", f"{name} 处理中…")
         try:
-            output = await agent(ctx)
+            output = await asyncio.wait_for(agent(ctx), timeout=timeout_seconds)
             ctx.results[key] = output if isinstance(output, dict) else {"output": output}
             summary.append({"key": key, "name": name, "status": "success"})
             await progress(name, "done", "")
+        except asyncio.TimeoutError:
+            msg = f"超时(>{int(timeout_seconds)}s)"
+            summary.append({"key": key, "name": name, "status": "failed", "error": msg})
+            await progress(name, "failed", msg)
         except Exception as e:  # noqa: BLE001 — 单 Agent 失败不应中断整条流水线
             summary.append({"key": key, "name": name, "status": "failed", "error": str(e)[:200]})
             await progress(name, "failed", str(e)[:120])
 
     return {"agents": summary, "results": ctx.results}
+
+
+def build_generation_result(brief: dict, results: Dict[str, dict]) -> dict:
+    """把十 Agent 编排产物映射成画布可用的 gen_result(与 quick-generate 同结构)。"""
+    img = results.get("image") or {}
+    mockup = results.get("mockup") or {}
+    copy = results.get("copy") or {}
+
+    main_image = None
+    if img.get("url"):
+        main_image = {
+            "asset_type": "main_image",
+            "url": img["url"],
+            "thumbnail_url": img["url"],
+            "width": img.get("width"),
+            "height": img.get("height"),
+            "model": img.get("provider"),
+            "goal": (brief or {}).get("product_name", ""),
+            "status": "succeeded",
+        }
+
+    scene_images = []
+    if mockup.get("url"):
+        scene_images.append({
+            "asset_type": "scene_image",
+            "url": mockup["url"],
+            "thumbnail_url": mockup["url"],
+            "goal": "mockup",
+            "status": "succeeded",
+        })
+
+    selling_points = []
+    if copy.get("headline") or copy.get("body"):
+        selling_points.append({"point": copy.get("headline", ""), "description": copy.get("body", "")})
+
+    return {
+        "main_image": main_image,
+        "white_bg": None,
+        "scene_images": scene_images,
+        "selling_points": selling_points,
+        "video_scripts": [],
+        "ad_material": {"hook": copy.get("headline", ""), "cta": copy.get("cta", "")},
+    }
 
 
 def _default_agents() -> Dict[str, Agent]:
