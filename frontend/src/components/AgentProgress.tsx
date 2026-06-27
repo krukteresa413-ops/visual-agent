@@ -1,96 +1,81 @@
 import { useEffect, useState } from 'react';
+import { api } from '../api/client';
 
-// 具名子 Agent 流(对齐 PRD §8.2:让用户看见过程 / 思维导图式状态流)
-const AGENTS = [
-  { icon: '🧠', label: 'Project Manager', desc: '解析 brief · 拆解任务 · 调度子 Agent', msg: '正在理解你的目标与受众' },
-  { icon: '🔍', label: 'Research · Brand · Visual', desc: '行业洞察 · 品牌策略 · 视觉方向', msg: '正在分析行业与视觉方向' },
-  { icon: '✍️', label: 'Copywriting', desc: '中文广告文案 · 标题 · 卖点', msg: '正在撰写中文文案与卖点' },
-  { icon: '🖼️', label: 'Image Generation', desc: '生成多平台视觉资产', msg: '正在生成第一套主视觉' },
-  { icon: '🧩', label: 'Layout', desc: '中文排版 · 画布组织', msg: '正在统一排版、颜色与字体' },
-  { icon: '📦', label: 'Mockup', desc: '包装 / 立牌 / 瓶身 mockup', msg: '正在套用真实场景 mockup' },
-  { icon: '🛡️', label: 'Compliance', desc: '广告法 · 平台合规检查', msg: '正在检查文案与平台合规' },
-  { icon: '⬇️', label: 'Export', desc: '多平台尺寸包 · 品牌资产包', msg: '正在整理可交付资产' },
+// 与后端 AGENT_SEQUENCE 的具名步骤一一对应(SSE step 标签即这些名字)
+const AGENTS: { name: string; sub: string; icon: string }[] = [
+  { name: 'PM', sub: '拆解任务', icon: '🧠' },
+  { name: 'Research', sub: '行业洞察', icon: '🔍' },
+  { name: 'Brand', sub: '品牌策略', icon: '🎨' },
+  { name: 'Copy', sub: '中文文案', icon: '✍️' },
+  { name: 'Visual', sub: '视觉方向', icon: '🖼️' },
+  { name: 'Image', sub: '渲染主视觉', icon: '⚡' },
+  { name: 'Layout', sub: '排版布局', icon: '🧩' },
+  { name: 'Mockup', sub: '场景套用', icon: '📦' },
+  { name: 'Compliance', sub: '合规检查', icon: '🛡️' },
+  { name: 'Export', sub: '整理交付', icon: '⬇️' },
 ];
 
-interface Props {
-  active: boolean;
-}
-
-export default function AgentProgress({ active }: Props) {
-  const [step, setStep] = useState(0);
+/** 真·十 Agent 状态流:订阅 /progress/{taskId}/stream,按真实 SSE step 点亮对应 Agent。 */
+export default function AgentProgress({ taskId }: { taskId?: string | null }) {
+  const [statusMap, setStatusMap] = useState<Record<string, string>>({});
+  const [finished, setFinished] = useState(false);
 
   useEffect(() => {
-    if (!active) { setStep(0); return; }
-    setStep(0);
-    const interval = setInterval(() => {
-      setStep((prev) => {
-        if (prev >= AGENTS.length - 1) { clearInterval(interval); return prev; }
-        return prev + 1;
-      });
-    }, 1600 + Math.random() * 1200); // 1.6–2.8s / agent
-    return () => clearInterval(interval);
-  }, [active]);
+    if (!taskId) return;
+    setStatusMap({});
+    setFinished(false);
+    const src = new EventSource(api.progress.streamUrl(taskId));
+    const onProgress = (e: MessageEvent) => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.step) setStatusMap((m) => ({ ...m, [d.step]: d.status || 'running' }));
+      } catch { /* ignore */ }
+    };
+    src.addEventListener('progress', onProgress);
+    src.addEventListener('done', () => { setFinished(true); src.close(); });
+    src.addEventListener('error', () => { src.close(); });
+    return () => src.close();
+  }, [taskId]);
 
-  if (!active) return null;
+  if (!taskId) return null;
 
-  const percent = Math.round(((step + 1) / AGENTS.length) * 100);
-  const current = AGENTS[Math.min(step, AGENTS.length - 1)];
+  const isDoneStatus = (s?: string) => s === 'done' || s === 'success';
+  const doneCount = AGENTS.filter((a) => isDoneStatus(statusMap[a.name])).length;
+  const percent = finished ? 100 : Math.round((doneCount / AGENTS.length) * 100);
 
   return (
     <div className="mx-auto w-full max-w-lg">
-      <div className="liquid-card space-y-4 p-5">
-        {/* 顶部:状态流 + 进度 */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="flex size-5 items-center justify-center">
-              <span className="size-2.5 animate-ping rounded-full bg-orange-400" />
-            </span>
-            <span className="text-sm font-medium text-gray-100">AI Agent 工作中</span>
-            <span className="ml-auto text-xs tabular-nums text-orange-300">{percent}%</span>
-          </div>
-          <p className="text-xs text-gray-400">{current.msg}…</p>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
-            <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-rose-500 transition-all duration-500" style={{ width: `${percent}%` }} />
-          </div>
+      <div className="liquid-card space-y-3 p-4">
+        <div className="flex items-center gap-2">
+          <span className="size-2.5 animate-ping rounded-full bg-orange-400" />
+          <span className="text-sm font-medium text-gray-100">十 Agent 协作中</span>
+          <span className="ml-auto text-xs tabular-nums text-orange-300">{finished ? '已完成' : `${percent}%`}</span>
         </div>
-
-        {/* 具名子 Agent 列表 */}
-        <div className="space-y-1.5">
-          {AGENTS.map((a, i) => {
-            const done = i < step;
-            const running = i === step;
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
+          <div className="h-full rounded-full bg-gradient-to-r from-orange-500 to-rose-500 transition-all duration-500" style={{ width: `${percent}%` }} />
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {AGENTS.map((a) => {
+            const st = statusMap[a.name];
+            const done = isDoneStatus(st);
+            const running = st === 'running';
+            const failed = st === 'failed';
+            const skipped = st === 'skipped';
+            const cls = running
+              ? 'border-orange-400/40 bg-orange-500/[0.08]'
+              : done
+                ? 'border-emerald-400/20 bg-emerald-500/[0.06]'
+                : failed
+                  ? 'border-rose-400/30 bg-rose-500/[0.06]'
+                  : 'border-white/[0.06] opacity-50';
             return (
-              <div
-                key={a.label}
-                className={
-                  'flex items-center gap-3 rounded-xl border px-3 py-2 transition-all duration-500 ' +
-                  (running
-                    ? 'border-orange-400/40 bg-orange-500/[0.08]'
-                    : done
-                      ? 'border-white/[0.06] bg-white/[0.03]'
-                      : 'border-transparent opacity-40')
-                }
-              >
-                <span
-                  className={
-                    'grid size-7 shrink-0 place-items-center rounded-lg text-sm ' +
-                    (done ? 'bg-emerald-500/15' : running ? 'bg-orange-500/20 animate-pulse' : 'bg-white/[0.05]')
-                  }
-                >
-                  {done ? '✓' : a.icon}
-                </span>
+              <div key={a.name} className={'flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-all duration-300 ' + cls}>
+                <span className="text-sm">{done ? '✓' : failed ? '✕' : a.icon}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium text-gray-200">{a.label}</span>
-                  <span className="block truncate text-[10px] text-gray-500">{a.desc}</span>
+                  <span className="block text-[11px] font-medium text-gray-200">{a.name}</span>
+                  <span className="block truncate text-[9px] text-gray-500">{failed ? '超时/失败' : skipped ? '跳过' : a.sub}</span>
                 </span>
-                {done && <span className="text-[10px] text-emerald-400/70">完成</span>}
-                {running && (
-                  <span className="flex gap-1">
-                    <span className="size-1 animate-bounce rounded-full bg-orange-400" style={{ animationDelay: '0ms' }} />
-                    <span className="size-1 animate-bounce rounded-full bg-orange-400" style={{ animationDelay: '150ms' }} />
-                    <span className="size-1 animate-bounce rounded-full bg-orange-400" style={{ animationDelay: '300ms' }} />
-                  </span>
-                )}
+                {running && <span className="size-1.5 animate-pulse rounded-full bg-orange-400" />}
               </div>
             );
           })}

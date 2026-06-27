@@ -67,9 +67,13 @@ export default function NewProjectPage() {
     try {
       const sceneName = scenes.find((s) => s.id === scene)?.name || '通用';
       const project = await api.projects.create(text.trim().slice(0, 20) || sceneName, text.trim().slice(0, 200));
-      const brief = { description: text.trim(), scene, scene_name: sceneName, platforms, mode };
-      // B 联动:跳进无限画布。全自动→quickMode 自动生成;协作导演→落地画布由用户触发
-      navigate(`/generate/${project.id}`, { state: { quickMode: mode === 'auto', prompt: text.trim(), brief } });
+      const brief = { product_name: text.trim().slice(0, 40), description: text.trim(), scene, scene_name: sceneName, platforms, mode };
+      // B 联动:跳进无限画布。全自动→十 Agent 真编排(orchestrate);协作导演→落地画布由用户触发
+      navigate(`/generate/${project.id}`, {
+        state: mode === 'auto'
+          ? { orchestrate: true, prompt: text.trim(), brief }
+          : { quickMode: false, prompt: text.trim(), brief },
+      });
     } catch {
       toast('创建项目失败，请重试');
     } finally {
