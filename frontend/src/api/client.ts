@@ -286,12 +286,6 @@ export const api = {
       client.delete(`/brand/manage/${id}`).then(r => r.data),
   },
 
-  // Copywriting (AI 文案助手)
-  copywriting: {
-    generate: (payload: { brief: Record<string, unknown>; copy_types?: string[] }) =>
-      client.post('/copywriting/generate', payload).then(r => r.data),
-  },
-
   // Export
   export: {
     markdown: (projectId: number) =>
