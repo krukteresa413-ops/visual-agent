@@ -24,13 +24,16 @@ export default function ProfilePage() {
   const [credits] = useState(() => 800 + Math.floor(Math.random() * 4200));
 
   useEffect(() => {
+    // providers 接口返回 {providers:[...]},做健壮取数组
+    const toArr = (d: unknown): GenerationProvider[] =>
+      Array.isArray(d) ? (d as GenerationProvider[]) : ((d as { providers?: GenerationProvider[] })?.providers ?? []);
     api.auth.me().then(setMe).catch(() => setMe(null));
-    api.generation.providers().then(setImgProviders).catch(() => setImgProviders([]));
-    api.video.providers().then(setVideoProviders).catch(() => setVideoProviders([]));
+    api.generation.providers().then((d) => setImgProviders(toArr(d))).catch(() => setImgProviders([]));
+    api.video.providers().then((d) => setVideoProviders(toArr(d))).catch(() => setVideoProviders([]));
   }, []);
 
-  const realImg = imgProviders.filter((p) => p.name !== 'local');
-  const realVideo = videoProviders.filter((p) => p.name !== 'local');
+  const realImg = (Array.isArray(imgProviders) ? imgProviders : []).filter((p) => p.name !== 'local');
+  const realVideo = (Array.isArray(videoProviders) ? videoProviders : []).filter((p) => p.name !== 'local');
   const display = me?.name || me?.email || me?.phone || 'MOYAG 用户';
 
   return (

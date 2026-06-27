@@ -153,7 +153,7 @@ export default function InspirationPage() {
 
   // ── Render: Main page ──
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0a0f] via-[#10101a] to-[#0a0a0f] p-6">
+    <div className="liquid-page min-h-screen p-6">
       <div className="max-w-[1400px] mx-auto">
         {/* Header */}
         <div className="mb-6">

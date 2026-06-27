@@ -419,7 +419,7 @@ export default function ProjectsPage() {
           <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold leading-[1.05] tracking-tight mb-1 bg-gradient-to-br from-gray-300 to-gray-400 bg-clip-text text-transparent" style={{ letterSpacing: '-0.02em' }}>
             让设计更简单
           </h1>
-          <p className="text-xs text-gray-500 max-w-lg mx-auto leading-snug">拖拽 PDF / PPT / Word 或直接输入产品描述，AI 自动提取卖点并生成六类视觉素材</p>
+          <p className="text-xs text-gray-500 max-w-lg mx-auto leading-snug">拖拽 PDF / PPT / Word 或直接输入产品描述，AI 自动提取卖点并生成视觉素材</p>
         </div>
 
         {reviewQuestions.length > 0 && reviewBrief && (
