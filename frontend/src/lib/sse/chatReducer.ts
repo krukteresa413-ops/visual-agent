@@ -112,10 +112,21 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     assets: event.assets,
   };
 
+  // 去重:同一 step 的 assistant 进度合并为一条(running→success 原地更新),
+  // 形成简洁的思考链,而非每个 SSE 事件都堆一张卡。
+  const dupIdx = state.messages.findIndex(
+    (m) => m.role === 'assistant' && m.step === message.step && m.status !== 'completed' && m.status !== 'error',
+  );
+  const messages = dupIdx >= 0
+    ? state.messages.map((m, i) => (i === dupIdx
+        ? { ...m, content: message.content || m.content, status: message.status, percent: message.percent, assets: message.assets.length ? message.assets : m.assets }
+        : m))
+    : [...state.messages, message];
+
   return {
     phase,
     percent: phase === 'completed' ? 100 : event.percent,
     error: phase === 'error' ? event.message : null,
-    messages: [...state.messages, message],
+    messages,
   };
 }

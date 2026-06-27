@@ -17,6 +17,7 @@ import { useState, useEffect, useRef, useReducer } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api, getToken } from '../api/client';
 import ModelPreferencePanel from './model/ModelPreferencePanel';
+import SkillsPopup from './SkillsPopup';
 import MessageRenderer from './MessageRenderer';
 import BusinessBriefDrawer from './BusinessBriefDrawer';
 import { chatReducer, initialChatState } from '../lib/sse/chatReducer';
@@ -82,6 +83,8 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const [currentPercent, setCurrentPercent] = useState(0);
   const [showAgentDropdown, setShowAgentDropdown] = useState(false);
   const [showModelPanel, setShowModelPanel] = useState(false);
+  const [showSkills, setShowSkills] = useState(false);
+  const [thinkOpen, setThinkOpen] = useState(true);
   const [agentMode, setAgentMode] = useState<AgentMode>('agent');
   const [genMode, setGenMode] = useState<'quick' | 'business'>('quick');
   const [activeModelKind, setActiveModelKind] = useState<'image' | 'video' | '3d'>('image');
@@ -479,6 +482,12 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const hasProgressMessages = renderedMessages.length > 0;
   const lifecyclePhase = chatState.phase;
 
+  // 思考链:用户消息常显;中间步骤折叠;完成/出错消息常显。完成后自动收起思考链。
+  const userMsgs = renderedMessages.filter((m) => m.role === 'user');
+  const stepMsgs = renderedMessages.filter((m) => m.role === 'assistant' && m.status !== 'completed' && m.status !== 'error');
+  const finalMsgs = renderedMessages.filter((m) => m.role === 'assistant' && (m.status === 'completed' || m.status === 'error'));
+  useEffect(() => { if (lifecyclePhase === 'completed') setThinkOpen(false); }, [lifecyclePhase]);
+
   return (
     <div data-ai-chat-panel="true" className={`flex flex-col h-full ${bg} border-l ${isLight ? 'border-gray-200' : 'border-white/5'}`}>
       {/* ── Header: project name + action icons ── */}
@@ -532,7 +541,26 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
               </span>
             </div>
 
-            {renderedMessages.map((msg) => (
+            {userMsgs.map((msg) => (
+              <MessageRenderer key={msg.id} message={msg} isLight={isLight} />
+            ))}
+            {stepMsgs.length > 0 && (
+              <details
+                open={thinkOpen}
+                onToggle={(e) => setThinkOpen((e.currentTarget as HTMLDetailsElement).open)}
+                className={`rounded-2xl border ${isLight ? 'border-gray-200 bg-gray-50' : 'border-white/10 bg-white/[0.03]'}`}
+              >
+                <summary className={`cursor-pointer select-none px-3 py-2 text-xs ${isLight ? 'text-gray-500' : 'text-gray-400'}`}>
+                  💭 思考过程 · {stepMsgs.length} 步{lifecyclePhase === 'completed' ? '(已折叠,点击展开)' : '…'}
+                </summary>
+                <div className="space-y-1 px-1 pb-2">
+                  {stepMsgs.map((msg) => (
+                    <MessageRenderer key={msg.id} message={msg} isLight={isLight} />
+                  ))}
+                </div>
+              </details>
+            )}
+            {finalMsgs.map((msg) => (
               <MessageRenderer key={msg.id} message={msg} isLight={isLight} />
             ))}
           </>
@@ -580,6 +608,18 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                 setSelectedModel={setSelectedModel}
               />
             </div>
+          )}
+          {showSkills && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setShowSkills(false)} />
+              <div className="absolute bottom-full left-0 z-30 mb-2 w-80">
+                <SkillsPopup
+                  isLight={isLight}
+                  onClose={() => setShowSkills(false)}
+                  onSelectSkill={(p) => { setInput((prev) => (prev ? prev + '\n' + p : p)); setShowSkills(false); }}
+                />
+              </div>
+            </>
           )}
           <div className="flex items-center justify-between px-3 pb-2.5">
             <div className="flex items-center gap-3">
@@ -633,7 +673,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                   </>
                 )}
               </div>
-              <button data-composer-tool="inspiration" type="button" disabled className={`${toolIconColor} cursor-not-allowed opacity-40`} title="灵感稍后接入" aria-label="灵感">
+              <button data-composer-tool="skills" type="button" onClick={() => setShowSkills((v) => !v)} className={`${toolIconColor} transition-colors hover:opacity-80`} title="生图 / 生视频技能" aria-label="技能">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg>
               </button>
               <button data-composer-tool="model" type="button" onClick={() => setShowModelPanel(!showModelPanel)} className={`${toolIconColor} transition-colors`} aria-label="模型偏好">

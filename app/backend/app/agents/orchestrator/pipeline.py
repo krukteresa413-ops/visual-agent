@@ -68,7 +68,9 @@ async def run_pipeline(
             output = await asyncio.wait_for(agent(ctx), timeout=timeout_seconds)
             ctx.results[key] = output if isinstance(output, dict) else {"output": output}
             summary.append({"key": key, "name": name, "status": "success"})
-            await progress(name, "done", "")
+            # 用 "success"(非 "done")上报单 Agent 完成:避免 GenerationTracker SSE
+            # 把单 Agent 的 done 当成整体终止而提前关闭流(导致进度卡在第一个 Agent)。
+            await progress(name, "success", "")
         except asyncio.TimeoutError:
             msg = f"超时(>{int(timeout_seconds)}s)"
             summary.append({"key": key, "name": name, "status": "failed", "error": msg})

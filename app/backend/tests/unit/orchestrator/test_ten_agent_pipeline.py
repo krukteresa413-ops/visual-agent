@@ -64,6 +64,23 @@ async def test_failed_agent_is_marked_and_pipeline_continues():
 
 
 @pytest.mark.asyncio
+async def test_per_agent_completion_uses_success_not_done():
+    """单 Agent 完成用 status='success';绝不能用 'done'(会让 SSE 把整条流提前关闭)。"""
+    async def ok(ctx):
+        return {"ok": True}
+
+    agents = {k: ok for k, _ in AGENT_SEQUENCE}
+    events = []
+
+    async def progress(label, status, message=""):
+        events.append((label, status))
+
+    await run_pipeline({}, 2, progress_callback=progress, agents=agents)
+    assert ("PM", "success") in events
+    assert all(s != "done" for _, s in events)
+
+
+@pytest.mark.asyncio
 async def test_slow_agent_times_out_and_pipeline_continues():
     import asyncio
 
