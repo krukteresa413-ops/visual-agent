@@ -23,6 +23,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { isLight, toggle } = useTheme();
   const [creating, setCreating] = useState(false);
+  // Mock 数据(暂无后端积分/头像接口):随机一次,保持本次会话稳定
+  const [credits] = useState(() => 800 + Math.floor(Math.random() * 4200));
+  const [avatar] = useState(() => {
+    const letters = ['M', 'A', 'Y', 'G', 'Z', 'L', 'K'];
+    const grads = [
+      'from-orange-500 to-rose-500',
+      'from-sky-500 to-indigo-500',
+      'from-emerald-500 to-teal-500',
+      'from-fuchsia-500 to-purple-500',
+      'from-amber-500 to-orange-600',
+    ];
+    return {
+      letter: letters[Math.floor(Math.random() * letters.length)],
+      grad: grads[Math.floor(Math.random() * grads.length)],
+    };
+  });
 
   const isActive = (path: string) =>
     pathname === path || (path !== '/' && pathname.startsWith(path));
@@ -46,17 +62,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       {!isCanvasWorkspace && (
         <header className={`sticky top-0 z-50 w-full border-b border-gray-800 backdrop-blur-md ${isLight ? 'bg-white/80' : 'bg-black/80'}`}>
           <div className="flex h-14 items-center gap-2 px-4">
-            {/* Logo -> home */}
+            {/* Logo -> home (PNG 字标,日间黑色 / 夜间反色为白) */}
             <Link to="/" className="flex items-center gap-2 shrink-0 pr-2" aria-label="MOYAG 首页">
-              <span className="grid place-items-center size-8 rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 shadow-sm">
-                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3l1.9 4.6 4.6 1.4-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4L12 3z" />
-                </svg>
-              </span>
-              <span className="hidden sm:flex flex-col leading-none">
-                <span className="text-base font-bold tracking-tight text-white">MOYAG</span>
-                <span className="text-[10px] tracking-widest text-gray-500">AGENT CANVAS</span>
-              </span>
+              <img src="/logo-wordmark.png" alt="MOYAG" className="logo-img h-6 w-auto sm:h-7" />
             </Link>
 
             {/* Nav tabs (desktop) */}
@@ -115,15 +123,15 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 <circle cx="12" cy="12" r="8" />
                 <path d="M12 8v8M9.5 10.5h3a1.5 1.5 0 0 1 0 3h-3" />
               </svg>
-              <span className="text-sm font-semibold tabular-nums">—</span>
+              <span className="text-sm font-semibold tabular-nums">{credits.toLocaleString()}</span>
             </div>
 
             {/* Theme toggle (reuse existing component — contract) */}
             <ThemeToggle isLight={isLight} toggle={toggle} />
 
-            {/* Avatar (decorative) */}
-            <span className="grid place-items-center size-8 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-[#fff] text-sm font-semibold shrink-0">
-              M
+            {/* Avatar (mock) */}
+            <span className={`grid place-items-center size-8 rounded-full bg-gradient-to-br ${avatar.grad} text-[#fff] text-sm font-semibold shrink-0`}>
+              {avatar.letter}
             </span>
           </div>
         </header>

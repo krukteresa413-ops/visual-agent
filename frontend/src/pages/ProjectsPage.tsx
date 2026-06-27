@@ -14,10 +14,10 @@ import { api } from '../api/client';
 
 
 const DIAMONDS = [
-  { title: '灵感源', desc: '场景模板', icon: '💡', action: 'inspiration', pos: 'top' },
-  { title: '资料库', desc: '脚本与素材', icon: '📚', action: 'library', pos: 'right' },
-  { title: '个人中心', desc: '账户与积分', icon: '👤', action: 'profile', pos: 'bottom' },
-  { title: '项目库', desc: '项目陈列柜', icon: '📁', action: 'projects', pos: 'left' },
+  { title: '灵感库', desc: '创意灵感', icon: '💡', action: 'inspiration' },
+  { title: '资料库', desc: '品牌与产品资产', icon: '📚', action: 'library' },
+  { title: '个人中心', desc: '账户与积分', icon: '👤', action: 'profile' },
+  { title: '项目库', desc: '项目陈列柜', icon: '📁', action: 'projects' },
 ];
 
 const PROJECT_COVER_GRADIENTS = [
@@ -431,14 +431,11 @@ export default function ProjectsPage() {
       ) : (
       <main className="max-w-2xl mx-auto px-6 pt-2 pb-12 flex flex-col items-center relative z-10">
 
-        <div className="text-center mb-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-400/20 text-orange-200/90 text-[11px] font-medium tracking-[0.18em] mb-3 uppercase">
-            <span>✦</span> AI-Powered Visual Content
-          </div>
-          <h1 className="text-3xl md:text-5xl font-extrabold leading-[1.05] tracking-tight mb-2 text-white" style={{ letterSpacing: '-0.02em' }}>
-            上传产品资料 <span className="bg-gradient-to-r from-orange-400 to-rose-400 bg-clip-text text-transparent">自动生成</span> 全套视觉素材
+        <div className="text-center mb-2">
+          <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold leading-[1.05] tracking-tight mb-1 bg-gradient-to-br from-gray-300 to-gray-400 bg-clip-text text-transparent" style={{ letterSpacing: '-0.02em' }}>
+            让设计更简单
           </h1>
-          <p className="text-xs md:text-sm text-gray-500 max-w-lg mx-auto leading-snug">拖拽 PDF / PPT / Word 或直接输入产品描述，AI 自动提取卖点并生成主视觉、小红书、电商、朋友圈等多平台营销资产</p>
+          <p className="text-xs text-gray-500 max-w-lg mx-auto leading-snug">拖拽 PDF / PPT / Word 或直接输入产品描述，AI 自动提取卖点并生成六类视觉素材</p>
         </div>
 
         {reviewQuestions.length > 0 && reviewBrief && (
@@ -517,43 +514,30 @@ export default function ProjectsPage() {
           </div>
         )}
 
-        <div className="relative h-[300px] w-[300px] sm:h-[420px] sm:w-[420px] mx-auto mt-2 mb-4">
-          {/* 连线 — 四模块到中心(虚线菱形) */}
-          <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <line x1="50" y1="14" x2="50" y2="50" stroke="currentColor" strokeWidth="0.4" className="text-white/15" strokeDasharray="2 2" />
-            <line x1="86" y1="50" x2="50" y2="50" stroke="currentColor" strokeWidth="0.4" className="text-white/15" strokeDasharray="2 2" />
-            <line x1="50" y1="86" x2="50" y2="50" stroke="currentColor" strokeWidth="0.4" className="text-white/15" strokeDasharray="2 2" />
-            <line x1="14" y1="50" x2="50" y2="50" stroke="currentColor" strokeWidth="0.4" className="text-white/15" strokeDasharray="2 2" />
-          </svg>
-
-          {/* 中心 — 新建项目 */}
+                <div className="liquid-diamond-cluster relative h-[260px] w-[260px] sm:h-[300px] sm:w-[300px] mx-auto mt-2 mb-4">
+          {DIAMONDS.map((d, i) => (
+            <button key={d.title} onClick={() => diamondAction(d.action)}
+              className={`liquid-diamond group absolute flex h-[110px] w-[110px] rotate-45 items-center justify-center rounded-2xl text-gray-100 transition-all duration-500 hover:z-10 sm:h-[130px] sm:w-[130px] sm:rounded-[20px] backdrop-blur-xl bg-gradient-to-br from-white/[0.12] via-white/[0.06] to-white/[0.02] border border-white/[0.15] hover:border-orange-500/40 hover:from-orange-500/20 hover:via-white/[0.08] hover:to-transparent hover:shadow-[0_0_40px_rgba(251,146,60,0.25),inset_0_1px_0_0_rgba(255,255,255,0.2)] hover:scale-105 active:scale-95 ${
+                i === 0 ? 'left-1/2 top-0 -translate-x-1/2' :
+                i === 1 ? 'left-0 top-1/2 -translate-y-1/2' :
+                i === 2 ? 'right-0 top-1/2 -translate-y-1/2' :
+                'left-1/2 bottom-0 -translate-x-1/2'}`}
+              style={{ zIndex: i === 0 ? 2 : 1 }}>
+              <span className="-rotate-45 flex flex-col items-center gap-0.5 transition-transform duration-300 group-hover:scale-105">
+                <span className="text-xl group-hover:scale-110 transition-transform duration-300">{d.icon}</span>
+                <span className="whitespace-nowrap text-xs font-semibold text-white/90 group-hover:text-white">{d.title}</span>
+                <span className="whitespace-nowrap text-[10px] text-gray-500 group-hover:text-gray-400 transition-colors">{d.desc}</span>
+              </span>
+            </button>
+          ))}
+          {/* 花心 — 新建入口 */}
           <button onClick={createEmptyCanvasProject}
-            className="group absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2"
-            aria-label="新建项目">
-            <div className="flex h-24 w-24 flex-col items-center justify-center rounded-3xl bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-[0_0_40px_rgba(251,146,60,0.3)] transition-transform duration-300 group-hover:scale-105 sm:h-28 sm:w-28">
-              <span className="text-2xl font-light sm:text-3xl">+</span>
-              <span className="mt-1 text-xs font-semibold sm:text-sm">新建项目</span>
-            </div>
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex h-[72px] w-[72px] sm:h-[84px] sm:w-[84px] items-center justify-center rounded-full backdrop-blur-xl bg-gradient-to-br from-orange-500/30 via-rose-500/20 to-purple-500/20 border border-orange-400/30 shadow-[0_0_40px_rgba(251,146,60,0.3),inset_0_1px_0_0_rgba(255,255,255,0.15)] hover:shadow-[0_0_60px_rgba(251,146,60,0.5),inset_0_1px_0_0_rgba(255,255,255,0.25)] hover:scale-110 hover:border-orange-400/60 transition-all duration-500 group">
+            <span className="flex flex-col items-center gap-0">
+              <span className="text-3xl sm:text-[36px] font-light group-hover:scale-110 transition-transform duration-300">+</span>
+              <span className="text-[10px] sm:text-[11px] font-semibold text-white/80 group-hover:text-white whitespace-nowrap">新建</span>
+            </span>
           </button>
-
-          {/* 四角模块(正立卡片) */}
-          {DIAMONDS.map((d) => {
-            const posCls =
-              d.pos === 'top' ? 'left-1/2 top-0 -translate-x-1/2' :
-              d.pos === 'right' ? 'right-0 top-1/2 -translate-y-1/2' :
-              d.pos === 'bottom' ? 'left-1/2 bottom-0 -translate-x-1/2' :
-              'left-0 top-1/2 -translate-y-1/2';
-            return (
-              <button key={d.title} onClick={() => diamondAction(d.action)}
-                className={`group absolute z-10 ${posCls}`}>
-                <div className="flex h-[88px] w-[88px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-white/[0.12] bg-white/[0.06] backdrop-blur-xl transition-all duration-300 group-hover:-translate-y-0.5 group-hover:border-orange-400/40 group-hover:bg-white/[0.09] group-hover:shadow-[0_0_30px_rgba(251,146,60,0.18)] sm:h-[112px] sm:w-[112px]">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] text-xl sm:h-10 sm:w-10">{d.icon}</span>
-                  <span className="text-xs font-semibold text-white/90 group-hover:text-white sm:text-sm">{d.title}</span>
-                  <span className="hidden text-[10px] text-gray-500 sm:block">{d.desc}</span>
-                </div>
-              </button>
-            );
-          })}
         </div>
       </main>
       )}

@@ -260,3 +260,7 @@ html.light {
 .animate-fadeIn {
   animation: fadeIn 0.5s ease-out;
 }
+
+/* Logo wordmark: 默认(夜间)反色为白,日间(html.light)保持原黑 */
+.logo-img { filter: invert(1) brightness(1.6); }
+html.light .logo-img { filter: none; }
