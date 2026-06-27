@@ -4,7 +4,6 @@ import { toast } from '../components/Toast';
 import ReviewQuestions from '../components/ReviewQuestions';
 import StrategyPanel from '../components/StrategyPanel';
 import BriefReviewPanel from '../components/BriefReviewPanel';
-import ThemeToggle, { useTheme } from '../components/ThemeToggle';
 import LibraryPanel from '../components/LibraryPanel';
 import InspirationPanel from '../components/InspirationPanel';
 // Prevent Vite tree-shaking
@@ -168,7 +167,6 @@ function ProjectGallery({
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
-  const { isLight, toggle: toggleTheme } = useTheme();
   const fileRef = useRef<HTMLInputElement>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showProjectGallery, setShowProjectGallery] = useState(false);
@@ -390,24 +388,10 @@ export default function ProjectsPage() {
         onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
 
 
-      {/* Floating theme toggle */}
-      {/* Floating theme toggle */}      <header className="sticky top-0 z-10 px-6 py-2 flex items-start justify-between">
-        <div className="flex flex-col items-start gap-0.5">
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="MOYAG" className="w-5 h-5 rounded-md object-contain" />
-            <span className="font-bold text-xs tracking-tight text-white/90">MOYAG</span>
-          </div>
-          <div className="pt-1"><ThemeToggle isLight={isLight} toggle={toggleTheme} /></div>
-        </div>
-        <p className="text-[11px] tracking-[0.2em] uppercase text-gray-500/80 mb-0 leading-none">AI-Powered Visual Content</p>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-1.5 text-sm">
-            <span className="text-gray-500">积分</span>
-            <span className="font-mono text-white/90 tabular-nums">1,280</span>
-          </div>
-          
-        </div>
-      </header>
+      {/* 顶部副标题(logo/主题/积分 已由全局顶栏提供,此处仅保留 eyebrow) */}
+      <div className="px-6 py-2 text-center">
+        <p className="text-[11px] tracking-[0.2em] uppercase text-gray-500/80 leading-none">AI-Powered Visual Content</p>
+      </div>
 
       {showBriefReview && reviewBrief ? (
         <div className="min-h-screen flex items-start justify-center pt-12 px-4 animate-fadeIn">
