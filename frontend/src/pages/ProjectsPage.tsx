@@ -19,6 +19,13 @@ const DIAMONDS = [
   { title: '项目库', desc: '项目陈列柜', icon: '📁', action: 'projects' },
 ];
 
+// 首页快捷工具入口(对齐示例站:数据看板 / AI 文案助手 / 视频剪辑)
+const QUICK_ENTRIES = [
+  { to: '/dashboard', icon: '📊', title: '数据看板', desc: '项目统计与爆款趋势' },
+  { to: '/copywriting', icon: '✍️', title: 'AI 文案助手', desc: '多版本多平台营销文案' },
+  { to: '/video-edit', icon: '⚡', title: '视频剪辑', desc: '上传视频自动剪成短视频' },
+];
+
 const PROJECT_COVER_GRADIENTS = [
   'from-orange-500/30 via-rose-400/14 to-white/[0.03]',
   'from-sky-400/22 via-orange-400/12 to-white/[0.03]',
@@ -522,6 +529,26 @@ export default function ProjectsPage() {
               <span className="text-[10px] sm:text-[11px] font-semibold text-white/80 group-hover:text-white whitespace-nowrap">新建</span>
             </span>
           </button>
+        </div>
+
+        {/* 快捷工具入口 */}
+        <div className="mx-auto mt-2 grid w-full max-w-3xl grid-cols-1 gap-3 px-4 pb-6 sm:grid-cols-3">
+          {QUICK_ENTRIES.map((e) => (
+            <button
+              key={e.to}
+              onClick={() => navigate(e.to)}
+              className="group flex items-center gap-3 rounded-2xl border border-white/[0.12] bg-white/[0.05] p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-orange-400/45 hover:bg-white/[0.08] hover:shadow-[0_18px_50px_rgba(251,146,60,0.14)]"
+            >
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-orange-500/25 to-rose-500/20 text-lg">{e.icon}</span>
+              <span className="min-w-0">
+                <span className="flex items-center gap-1 text-sm font-semibold text-white">
+                  {e.title}
+                  <span className="text-orange-300 opacity-0 transition-opacity duration-300 group-hover:opacity-100">→</span>
+                </span>
+                <span className="block truncate text-[11px] text-gray-500">{e.desc}</span>
+              </span>
+            </button>
+          ))}
         </div>
       </main>
       )}
