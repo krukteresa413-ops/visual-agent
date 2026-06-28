@@ -5,6 +5,7 @@ import {
   isBlank,
   answerDisplay,
   buildBriefFromAnswers,
+  suggestSellingPoints,
 } from './templateQuestions';
 
 describe('templateQuestions', () => {
@@ -71,6 +72,23 @@ describe('templateQuestions', () => {
       const { brief } = buildBriefFromAnswers({ brand_name: '', usage_scenarios: [] }, 'seed');
       expect(brief.brand_name).toBeUndefined();
       expect(brief.usage_scenarios).toBeUndefined();
+    });
+  });
+
+  describe('suggestSellingPoints (图一 大胆猜测)', () => {
+    it('returns category-specific guesses for known category', () => {
+      const s = suggestSellingPoints({ category: '服饰鞋包' });
+      expect(s).toEqual(expect.arrayContaining(['显瘦', '百搭']));
+      expect(s.length).toBeGreaterThan(0);
+      expect(s.length).toBeLessThanOrEqual(10);
+    });
+    it('falls back to universal guesses for unknown/empty category', () => {
+      const s = suggestSellingPoints({});
+      expect(s).toEqual(expect.arrayContaining(['高性价比']));
+    });
+    it('dedupes', () => {
+      const s = suggestSellingPoints({ category: '美妆护肤' });
+      expect(new Set(s).size).toBe(s.length);
     });
   });
 });

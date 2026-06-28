@@ -78,6 +78,11 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   const [actionTaskId, setActionTaskId] = useState<string | null>(null);
   const [actionProgress, setActionProgress] = useState('idle');
   const [actionError, setActionError] = useState<string | null>(null);
+  // 图二:二次编辑改用画布内弹窗 + 失败/无新图的前端提示(toast)
+  const [reeditNodeId, setReeditNodeId] = useState<string | null>(null);
+  const [reeditText, setReeditText] = useState('');
+  const [reeditBusy, setReeditBusy] = useState(false);
+  const [canvasNotice, setCanvasNotice] = useState<{ kind: 'info' | 'warn'; text: string } | null>(null);
   const { getNodes, getViewport } = useReactFlow();
   const { saveCanvas, rememberSavedCanvas } = useCanvasPersistence(projectId);
 
@@ -185,10 +190,11 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
   }, [nodes]);
 
 
-  const applyCanvasActionResult = useCallback((result: any) => {
+  const applyCanvasActionResult = useCallback((result: any): boolean => {
     const nextElement = result?.node;
     const nextEdge = result?.edge;
-    if (!nextElement || !nextEdge) return;
+    // 图二:complete 不等于出图。网关降级时 result 可能没有 node/edge -> 无新图
+    if (!nextElement || !nextEdge) return false;
 
     const parent = getNodes().find(node => node.id === nextEdge.source_id || node.data.legacy_id === nextEdge.source_id);
     const positionedElement = {
@@ -219,6 +225,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     setNodes(nextNodes);
     setEdges(nextEdges);
     void saveCanvas({ nodes: nextNodes, edges: nextEdges, viewport: getViewport() });
+    return true;
   }, [edges, getNodes, getViewport, makeEditableRelationEdges, nodes, saveCanvas, setEdges, setNodes]);
 
   const runCanvasAction = useCallback(async () => {
@@ -287,31 +294,68 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     if (!node || !instruction.trim()) return;
     const selection = buildSelectionContext([node] as typeof nodes);
     setActionProgress('processing');
+    setReeditBusy(true);
+    setCanvasNotice({ kind: 'info', text: '正在二次编辑,生成新图中…' });
     try {
       const started = await api.canvasActions.start({ project_id: projectId, instruction: instruction.trim(), selection });
       const taskId = String(started.task_id);
       for (let i = 0; i < 80; i += 1) {
         const latest = await api.canvasActions.poll(taskId);
-        if (latest.status === 'complete') { applyCanvasActionResult(latest.result); setActionProgress('complete'); return; }
-        if (latest.status === 'error') { setActionProgress('error'); return; }
+        if (latest.status === 'complete') {
+          // 图二:complete 后要确认确实产出了新图;没出图给前端提示
+          const applied = applyCanvasActionResult(latest.result);
+          if (applied) {
+            setActionProgress('complete');
+            setCanvasNotice({ kind: 'info', text: '已生成新图,并连上「修改」关系线' });
+          } else {
+            setActionProgress('error');
+            setCanvasNotice({ kind: 'warn', text: '图像服务暂时不稳定,本次没能生成新图,请稍后重试' });
+          }
+          return;
+        }
+        if (latest.status === 'error') {
+          setActionProgress('error');
+          setCanvasNotice({ kind: 'warn', text: '图像服务暂时不稳定,本次没能生成新图,请稍后重试' });
+          return;
+        }
         await new Promise((r) => window.setTimeout(r, 500));
       }
       setActionProgress('error');
+      setCanvasNotice({ kind: 'warn', text: '生成超时,图像服务可能繁忙,请稍后重试' });
     } catch {
       setActionProgress('error');
+      setCanvasNotice({ kind: 'warn', text: '图像服务暂时不稳定,本次没能生成新图,请稍后重试' });
+    } finally {
+      setReeditBusy(false);
     }
   }, [getNodes, projectId, applyCanvasActionResult]);
 
+  // 图二:✎ 编辑 -> 打开画布内弹窗(替代原生 window.prompt)
   useEffect(() => {
     const handler = (e: Event) => {
       const nodeId = (e as CustomEvent).detail?.nodeId;
       if (!nodeId) return;
-      const instruction = window.prompt('二次编辑:描述你想怎么改这张图');
-      if (instruction && instruction.trim()) void reEdit(String(nodeId), instruction);
+      setReeditText('');
+      setReeditNodeId(String(nodeId));
     };
     window.addEventListener('moyag:reedit', handler as EventListener);
     return () => window.removeEventListener('moyag:reedit', handler as EventListener);
-  }, [reEdit]);
+  }, []);
+
+  const confirmReedit = () => {
+    const id = reeditNodeId;
+    const text = reeditText.trim();
+    if (!id || !text) return;
+    setReeditNodeId(null);
+    void reEdit(id, text);
+  };
+
+  // 提示自动消失(进行中的不消失,直到被结果替换)
+  useEffect(() => {
+    if (!canvasNotice || reeditBusy) return;
+    const t = window.setTimeout(() => setCanvasNotice(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [canvasNotice, reeditBusy]);
 
   const [imgActionBusy, setImgActionBusy] = useState<string | null>(null);
   const handleImageAction = useCallback(async (id: string) => {
@@ -387,6 +431,40 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div data-flow-canvas-stage className="relative min-w-0 flex-1 overflow-hidden">
+          {/* 图二:画布内二次编辑弹窗(替代浏览器原生 prompt) */}
+          {reeditNodeId && (
+            <div className="absolute inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setReeditNodeId(null)}>
+              <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="mb-1 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-900">✎ 二次编辑</h3>
+                  <button onClick={() => setReeditNodeId(null)} className="text-gray-400 transition-colors hover:text-gray-700">✕</button>
+                </div>
+                <p className="mb-3 text-xs text-gray-500">描述你想怎么改这张图,例如「换成男性模特」「背景换成夜景」。</p>
+                <textarea
+                  autoFocus
+                  value={reeditText}
+                  onChange={(e) => setReeditText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); confirmReedit(); } }}
+                  rows={3}
+                  placeholder="描述修改需求…(Ctrl/⌘+Enter 提交)"
+                  className="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-purple-400"
+                />
+                <div className="mt-3 flex justify-end gap-2">
+                  <button onClick={() => setReeditNodeId(null)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-50">取消</button>
+                  <button onClick={confirmReedit} disabled={!reeditText.trim()} className="rounded-lg bg-purple-600 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-500 disabled:opacity-50">确定</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* 图二:画布内置提示(生成中 / 失败 / 无新图) */}
+          {canvasNotice && (
+            <div className={`pointer-events-none absolute left-1/2 top-4 z-40 -translate-x-1/2 rounded-full border px-4 py-2 text-xs shadow-lg ${canvasNotice.kind === 'warn' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-transparent bg-gray-900/90 text-white'}`}>
+              <span className="inline-flex items-center gap-2">
+                {reeditBusy && <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />}
+                {canvasNotice.kind === 'warn' ? '⚠ ' : ''}{canvasNotice.text}
+              </span>
+            </div>
+          )}
           {false && (
           <div
             data-ai-companion

@@ -30,8 +30,8 @@ export const TEMPLATE_QUESTIONS: TemplateQuestion[] = [
   { key: 'usage_scenarios', label: '使用场景', icon: '🎯', type: 'multi', optional: true,
     options: ['居家', '通勤', '旅行', '办公', '运动健身', '送礼', '节日', '户外'],
     prompt: '主要的使用场景有哪些?(可多选,也可输入)' },
-  { key: 'selling_points', label: '核心卖点', icon: '💎', type: 'tags', optional: true,
-    prompt: '核心卖点有哪些?用逗号或空格分隔输入。' },
+  { key: 'selling_points', label: '核心卖点', icon: '💎', type: 'multi', optional: true,
+    prompt: '核心卖点有哪些?我先按品类猜了几个,点选即可,也能补充输入。' },
   { key: 'brand_style', label: '品牌风格', icon: '🎨', type: 'single', optional: true,
     options: ['简约', '高级质感', '可爱', '科技感', '国潮', '复古', '自然清新', '轻奢'],
     prompt: '想要什么样的画面风格?' },
@@ -49,6 +49,26 @@ export const TEMPLATE_QUESTIONS: TemplateQuestion[] = [
     options: ['618', '双11', '双12', '年货节', '情人节', '日常', '无'],
     prompt: '是否配合某个促销节点?' },
 ];
+
+// 图一:核心卖点「大胆猜测」—— 按品类给候选卖点,减少用户思考。点选或补充。
+const SELLING_POINTS_BY_CATEGORY: Record<string, string[]> = {
+  美妆护肤: ['保湿补水', '美白提亮', '抗老紧致', '温和不刺激', '持妆', '清爽不油腻', '成分天然'],
+  食品饮料: ['好吃不胖', '0蔗糖', '原产地直供', '配料干净', '即食方便', '高蛋白', '送礼有面'],
+  '3C数码': ['续航持久', '高性能', '轻薄便携', '高清画质', '快充', '大存储', '散热好'],
+  服饰鞋包: ['显瘦', '百搭', '透气舒适', '版型好', '耐穿', '轻盈', '时尚潮流'],
+  家居家电: ['省空间', '静音', '节能省电', '易清洁', '大容量', '颜值高', '智能控制'],
+  母婴亲子: ['安全无毒', '亲肤柔软', '易清洗', '宝宝爱用', '成分安全', '贴心设计'],
+  宠物用品: ['爱吃爱玩', '安全材质', '易清洁', '耐咬耐用', '营养均衡', '除味'],
+};
+const UNIVERSAL_SELLING_POINTS = ['高性价比', '品质可靠', '颜值高', '热销爆款'];
+
+/** 按已答字段(主要看品类)大胆猜测候选卖点,作为快选 chips。 */
+export function suggestSellingPoints(answers: Record<string, AnswerValue>): string[] {
+  const cat = (typeof answers.category === 'string' ? answers.category : '') || '';
+  const base = SELLING_POINTS_BY_CATEGORY[cat] || [];
+  const merged = [...base, ...UNIVERSAL_SELLING_POINTS];
+  return Array.from(new Set(merged)).slice(0, 10);
+}
 
 const MULTI = (t: QuestionType) => t === 'multi' || t === 'tags';
 

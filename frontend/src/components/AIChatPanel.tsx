@@ -27,6 +27,7 @@ import {
   normalizeAnswer,
   isBlank,
   buildBriefFromAnswers,
+  suggestSellingPoints,
   type AnswerValue,
 } from '../lib/questionnaire/templateQuestions';
 
@@ -660,7 +661,11 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
           <QuestionnairePanel
             isLight={isLight}
             index={qaIndex}
-            question={TEMPLATE_QUESTIONS[qaIndex]}
+            question={
+              TEMPLATE_QUESTIONS[qaIndex].key === 'selling_points'
+                ? { ...TEMPLATE_QUESTIONS[qaIndex], options: suggestSellingPoints(qaAnswers) }
+                : TEMPLATE_QUESTIONS[qaIndex]
+            }
             answers={qaAnswers}
             multiSelected={qaMulti}
             onPickSingle={(opt) => recordAnswer(opt)}
