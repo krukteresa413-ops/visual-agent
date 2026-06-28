@@ -306,7 +306,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       if (!url) return;
       setImgActionBusy('cutout');
       try {
-        await api.canvas.run({
+        await api.canvasImageActions.run({
           project_id: projectId,
           asset_id: String(node.data?.legacy_id || node.id),
           action: 'cutout',
