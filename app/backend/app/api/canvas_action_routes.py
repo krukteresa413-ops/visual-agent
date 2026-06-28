@@ -14,8 +14,10 @@ from app.services.image_generation_service import image_generation_service
 
 router = APIRouter(prefix="/api/v1/canvas-actions", tags=["canvas-actions"])
 
-# 图二:二次编辑(img2img)的 provider 自动回退链
+# 文生图(无源图)的回退链
 _IMAGE_CHAIN = ("dataeyes", "mige", "pollinations", "local")
+# 图生图(有源图)只用真正读 image_urls 的 provider,避免无视源图重画导致「整张图都变」
+_I2I_CHAIN = ("dataeyes",)
 
 _canvas_action_tasks: dict[str, dict[str, Any]] = {}
 
@@ -77,17 +79,32 @@ async def poll_canvas_action(task_id: str):
 
 async def generate_canvas_variant_asset(req: CanvasActionRequest, source: CanvasSelectionItem) -> tuple[str, str]:
     image_options: dict[str, Any] = {}
-    if source.imageUrl:
+    is_i2i = bool(source.imageUrl)
+    if is_i2i:
         image_options["image_urls"] = [source.imageUrl]
-    # 图二:provider 自动回退链(与十 Agent Image / quick-generate 一致)。
-    # 单一 dataeyes 网关 503 时不再直接失败,降级到 mige/pollinations/local 仍出图。
+
+    # 图生图保真:只有 dataeyes 真正读源图(image_urls)做图像条件;pollinations/local
+    # 会无视源图按文字重画(导致「衣服全变」)。因此 img2img 只走 dataeyes,失败就
+    # 如实报错(前端给「服务不稳定,请重试」提示),绝不降级到会改掉整张图的 provider。
+    chain = _I2I_CHAIN if is_i2i else _IMAGE_CHAIN
+
+    # 编辑式提示词:引导模型尽量保留原图其它部分,只改用户要求处
+    if is_i2i:
+        gen_prompt = (
+            "这是一张需要局部修改的图片。请在尽量保留原图整体构图、背景、主体姿态、"
+            f"版式、品牌标识与文字的前提下,仅按以下要求修改:{req.instruction}。"
+            "除明确要求外的部分保持与原图一致,不要改变其它元素。"
+        )
+    else:
+        gen_prompt = req.instruction
+
     image_result = None
     last_err: Exception | None = None
-    for prov in _IMAGE_CHAIN:
+    for prov in chain:
         try:
             r = await image_generation_service.generate(ImageGenerationRequest(
                 provider=prov,
-                prompt=req.instruction,
+                prompt=gen_prompt,
                 model="gemini-2.5-flash-image" if prov == "dataeyes" else None,
                 width=1024,
                 height=1024,
@@ -100,6 +117,8 @@ async def generate_canvas_variant_asset(req: CanvasActionRequest, source: Canvas
             last_err = e
             continue
     if image_result is None or not image_result.images:
+        if is_i2i:
+            raise RuntimeError(f"图生图暂不可用:支持图像编辑的服务(dataeyes)未响应,请稍后重试 ({last_err})")
         raise RuntimeError(f"图编辑生成失败:所有图像 provider 不可用 ({last_err})")
     image_url = image_result.images[0].url
     asset_plan = {

@@ -789,6 +789,8 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                           const state: any = results[1].value;
                           for (const el of (state?.elements || []) as any[]) { const u = pickUrl(el); if (u) urls.push(u); }
                         }
+                        // Q1:本地上传的图片也作为可选源图(置顶),支持「本地图 -> 图生图/图生视频」
+                        if (uploadedFile?.type === 'image' && uploadedFile.url) urls.unshift(uploadedFile.url);
                         const valid = urls.filter((u): u is string => typeof u === 'string' && /^(https?:|\/)/.test(u));
                         setSkillImages(Array.from(new Set(valid)));
                         setSkillPicker({ prompt: p, mode: m });
