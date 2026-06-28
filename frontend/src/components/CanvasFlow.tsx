@@ -278,6 +278,60 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     }
   }, [actionInstruction, actionProgress, applyCanvasActionResult, projectId, selectionContext]);
 
+  const [imgActionBusy, setImgActionBusy] = useState<string | null>(null);
+  const handleImageAction = useCallback(async (id: string) => {
+    const node = selectedActionNode;
+    if (!node) return;
+    const url = (node.data?.url || node.data?.preview_url) as string | undefined;
+    if (id === 'download') {
+      if (url) window.open(url, '_blank');
+      return;
+    }
+    if (id === 'delete') {
+      const remaining = getNodes().filter((n) => n.id !== node.id) as typeof nodes;
+      setNodes(remaining);
+      setSelectedActionNode(null);
+      void saveCanvas({ nodes: remaining, edges, viewport: getViewport() });
+      return;
+    }
+    if (id === 'front' || id === 'back') {
+      setNodes((current) => {
+        const zs = current.map((n) => Number(n.zIndex ?? 0));
+        const z = id === 'front' ? Math.max(0, ...zs) + 1 : Math.min(0, ...zs) - 1;
+        return current.map((n) => (n.id === node.id ? { ...n, zIndex: z } : n));
+      });
+      return;
+    }
+    if (id === 'cutout') {
+      if (!url) return;
+      setImgActionBusy('cutout');
+      try {
+        await api.canvas.run({
+          project_id: projectId,
+          asset_id: String(node.data?.legacy_id || node.id),
+          action: 'cutout',
+          image_url: url,
+        });
+        const data = await api.atelierCanvas.getState(projectId);
+        if (data?.elements?.length) {
+          setNodes((current) => {
+            const ids = new Set(current.map((n) => String(n.data?.legacy_id || n.id)));
+            let next = current;
+            for (const el of data.elements) {
+              if (ids.has(String(el.id))) continue;
+              next = upsertFlowCanvasNode(next, el) as typeof current;
+            }
+            return next;
+          });
+        }
+      } catch {
+        /* 抠图失败,忽略 */
+      } finally {
+        setImgActionBusy(null);
+      }
+    }
+  }, [selectedActionNode, getNodes, setNodes, setSelectedActionNode, saveCanvas, edges, getViewport, projectId, nodes]);
+
   const selectedActionAnchor = selectedActionNode ? actionBarAnchor({
     x: selectedActionNode.position.x,
     y: selectedActionNode.position.y,
@@ -347,7 +401,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
             </div>
           </div>
           )}
-          {selectedActionAnchor && <ImageActionBar left={selectedActionAnchor.left} top={selectedActionAnchor.top} />}
+          {selectedActionAnchor && <ImageActionBar left={selectedActionAnchor.left} top={selectedActionAnchor.top} onAction={handleImageAction} busy={imgActionBusy} />}
           <ReactFlow
             nodes={nodes}
             edges={edges}
