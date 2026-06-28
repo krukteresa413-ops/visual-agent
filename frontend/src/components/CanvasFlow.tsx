@@ -198,11 +198,14 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     };
     const nextNodes = upsertFlowCanvasNode(getNodes() as typeof nodes, positionedElement);
     const relationType = nextEdge.relation_type || nextEdge.metadata?.relation_type || 'variant_of';
+    // 连线标签凝练改动次数:以源图为起点的第几次修改
+    const editCount = parent ? edges.filter((e) => e.source === parent.id).length + 1 : 1;
+    const editLabel = `第${editCount}次修改`;
     const variantEdge = {
       ...nextEdge,
-      label: nextEdge.label || relationType,
+      label: editLabel,
       relation_type: relationType,
-      metadata: nextEdge.metadata || {},
+      metadata: { ...(nextEdge.metadata || {}), edit_index: editCount },
     };
     const flowEdge = makeEditableRelationEdges(legacyToFlowCanvas({
       elements: [],
@@ -277,6 +280,38 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       setActionError(error instanceof Error ? error.message : 'canvas action failed');
     }
   }, [actionInstruction, actionProgress, applyCanvasActionResult, projectId, selectionContext]);
+
+  // 二次编辑:对指定节点用修改指令做 img2img,产出新图并连「第N次修改」线(复用 applyCanvasActionResult)
+  const reEdit = useCallback(async (nodeId: string, instruction: string) => {
+    const node = getNodes().find((n) => n.id === nodeId);
+    if (!node || !instruction.trim()) return;
+    const selection = buildSelectionContext([node] as typeof nodes);
+    setActionProgress('processing');
+    try {
+      const started = await api.canvasActions.start({ project_id: projectId, instruction: instruction.trim(), selection });
+      const taskId = String(started.task_id);
+      for (let i = 0; i < 80; i += 1) {
+        const latest = await api.canvasActions.poll(taskId);
+        if (latest.status === 'complete') { applyCanvasActionResult(latest.result); setActionProgress('complete'); return; }
+        if (latest.status === 'error') { setActionProgress('error'); return; }
+        await new Promise((r) => window.setTimeout(r, 500));
+      }
+      setActionProgress('error');
+    } catch {
+      setActionProgress('error');
+    }
+  }, [getNodes, projectId, applyCanvasActionResult]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const nodeId = (e as CustomEvent).detail?.nodeId;
+      if (!nodeId) return;
+      const instruction = window.prompt('二次编辑:描述你想怎么改这张图');
+      if (instruction && instruction.trim()) void reEdit(String(nodeId), instruction);
+    };
+    window.addEventListener('moyag:reedit', handler as EventListener);
+    return () => window.removeEventListener('moyag:reedit', handler as EventListener);
+  }, [reEdit]);
 
   const [imgActionBusy, setImgActionBusy] = useState<string | null>(null);
   const handleImageAction = useCallback(async (id: string) => {
