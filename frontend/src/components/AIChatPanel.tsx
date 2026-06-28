@@ -19,8 +19,16 @@ import { api, getToken } from '../api/client';
 import ModelPreferencePanel from './model/ModelPreferencePanel';
 import SkillsPopup from './SkillsPopup';
 import MessageRenderer from './MessageRenderer';
+import QuestionnairePanel from './QuestionnairePanel';
 import { chatReducer, initialChatState } from '../lib/sse/chatReducer';
 import { sseToChatEventAdapter } from '../lib/sse/sseToChatEventAdapter';
+import {
+  TEMPLATE_QUESTIONS,
+  normalizeAnswer,
+  isBlank,
+  buildBriefFromAnswers,
+  type AnswerValue,
+} from '../lib/questionnaire/templateQuestions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -90,6 +98,13 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const [skillPicker, setSkillPicker] = useState<{ prompt: string; mode: AgentMode } | null>(null);
   const [skillImages, setSkillImages] = useState<string[]>([]);
   const [agentMode, setAgentMode] = useState<AgentMode>('agent');
+  // 图一:AI 追问问卷(前端确定式,基于商业图视频模板字段)
+  const [qaActive, setQaActive] = useState(false);
+  const [qaIndex, setQaIndex] = useState(0);
+  const [qaSeed, setQaSeed] = useState('');
+  const [qaAnswers, setQaAnswers] = useState<Record<string, AnswerValue>>({});
+  const [qaMulti, setQaMulti] = useState<string[]>([]);
+  const [qaDone, setQaDone] = useState(false); // 本会话已走过一次问卷后,后续直接对话
   const [activeModelKind, setActiveModelKind] = useState<'image' | 'video' | '3d'>('image');
   const [autoModel, setAutoModel] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -286,9 +301,56 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     }
   };
 
+  // ── 图一:AI 追问问卷 ──
+  const startQuestionnaire = (seed: string) => {
+    setQaSeed(seed);
+    setQaAnswers({});
+    setQaIndex(0);
+    setQaMulti([]);
+    setQaActive(true);
+    setInput('');
+  };
+
+  const finishQuestionnaire = (answers: Record<string, AnswerValue>) => {
+    setQaActive(false);
+    setQaDone(true);
+    const { brief, prompt } = buildBriefFromAnswers(answers, qaSeed);
+    void runGeneration(prompt, brief, 'image-gen');
+  };
+
+  // 记录(或跳过)当前题答案,推进到下一题;走完则组装 brief 自动生成
+  const advanceWith = (answers: Record<string, AnswerValue>) => {
+    const next = qaIndex + 1;
+    if (next < TEMPLATE_QUESTIONS.length) {
+      setQaAnswers(answers);
+      setQaIndex(next);
+      setQaMulti([]);
+      setInput('');
+    } else {
+      finishQuestionnaire(answers);
+    }
+  };
+
+  const recordAnswer = (raw: AnswerValue) => {
+    const q = TEMPLATE_QUESTIONS[qaIndex];
+    const val = normalizeAnswer(q, raw);
+    const answers = { ...qaAnswers };
+    if (!isBlank(val)) answers[q.key] = val;
+    advanceWith(answers);
+  };
+
+  const skipCurrent = () => advanceWith({ ...qaAnswers });
+  const cancelQuestionnaire = () => finishQuestionnaire({ ...qaAnswers });
+  const toggleMulti = (opt: string) =>
+    setQaMulti((prev) => (prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]));
+
   const handleSubmit = async () => {
+    if (isStreaming) return;
     const prompt = input.trim();
-    if (!prompt || isStreaming) return;
+    if (qaActive) { recordAnswer(prompt); return; }
+    if (!prompt) return;
+    // Agent 模式首次创作 -> 进入模板追问;已问过本会话或图生图/视频模式 -> 原行为
+    if (agentMode === 'agent' && !qaDone) { startQuestionnaire(prompt); return; }
     runGeneration(prompt);
   };
 
@@ -594,6 +656,22 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
           </>
         ) : null}
 
+        {qaActive && (
+          <QuestionnairePanel
+            isLight={isLight}
+            index={qaIndex}
+            question={TEMPLATE_QUESTIONS[qaIndex]}
+            answers={qaAnswers}
+            multiSelected={qaMulti}
+            onPickSingle={(opt) => recordAnswer(opt)}
+            onToggleMulti={toggleMulti}
+            onCommitMulti={() => recordAnswer(qaMulti)}
+            onSubmitDate={(v) => recordAnswer(v)}
+            onSkip={skipCurrent}
+            onCancel={cancelQuestionnaire}
+          />
+        )}
+
         <div ref={bottomRef} />
       </div>
 
@@ -610,7 +688,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
               }
             }}
             rows={2}
-            placeholder="输入你的想法，Enter 发送，Shift+Enter 换行"
+            placeholder={qaActive ? '输入答案,或点选上方选项;Enter 提交,留空跳过' : '输入你的想法，Enter 发送，Shift+Enter 换行'}
             className={`max-h-28 min-h-[56px] w-full resize-none rounded-3xl bg-transparent px-4 py-3 text-sm ${textColor} outline-none placeholder:${placeholderText}`}
           />
           {showModelPanel && (
