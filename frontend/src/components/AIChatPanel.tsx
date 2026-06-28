@@ -218,7 +218,8 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         auto_model: autoModel,
         agent_mode: mode,
         brief,
-        reference_image_url: ((brief as any)?.reference_image_url as string | undefined) ?? refUrl,
+        // 图生视频/图生图:优先 brief 指定 > 上传图 > 对话中关联的画布图(chatAssetContext)
+        reference_image_url: ((brief as any)?.reference_image_url as string | undefined) ?? refUrl ?? chatAssetContext?.image_url,
       } as Parameters<typeof api.generation.quickGenerate>[0] & { agent_mode: AgentMode });
       onTaskStarted?.(task.task_id);
 

@@ -70,22 +70,29 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
   if (action.type === 'assistantStatus') {
     const status = action.status === 'user' ? 'streaming' : action.status;
+    const phase = status === 'completed' || status === 'error' || status === 'thinking' || status === 'evaluating' ? status : 'streaming';
+    const msg: ChatMessage = {
+      id: nextId(state.messages),
+      role: 'assistant',
+      step: action.step,
+      content: action.content,
+      status: action.status,
+      percent: action.percent,
+      assets: action.assets || [],
+    };
+    // 终态(完成/出错)只保留一条:多处完成回调(poll + SSE)不再堆重复「完成」卡。
+    const isTerminal = action.status === 'completed' || action.status === 'error';
+    const termIdx = isTerminal
+      ? state.messages.findIndex((m) => m.role === 'assistant' && (m.status === 'completed' || m.status === 'error'))
+      : -1;
+    const messages = termIdx >= 0
+      ? state.messages.map((m, i) => (i === termIdx ? msg : m))
+      : [...state.messages, msg];
     return {
-      phase: status === 'completed' || status === 'error' || status === 'thinking' || status === 'evaluating' ? status : 'streaming',
+      phase,
       percent: action.percent,
       error: action.status === 'error' ? action.content : null,
-      messages: [
-        ...state.messages,
-        {
-          id: nextId(state.messages),
-          role: 'assistant',
-          step: action.step,
-          content: action.content,
-          status: action.status,
-          percent: action.percent,
-          assets: action.assets || [],
-        },
-      ],
+      messages,
     };
   }
 
@@ -112,11 +119,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     assets: event.assets,
   };
 
-  // 去重:同一 step 的 assistant 进度合并为一条(running→success 原地更新),
-  // 形成简洁的思考链,而非每个 SSE 事件都堆一张卡。
-  const dupIdx = state.messages.findIndex(
-    (m) => m.role === 'assistant' && m.step === message.step && m.status !== 'completed' && m.status !== 'error',
-  );
+  // 去重:① 终态(完成/出错)全局只保留一条;② 否则按 step 合并(running→success 原地更新),
+  // 形成简洁思考链,而非每个 SSE 事件都堆一张卡。
+  const isTerminal = phase === 'completed' || phase === 'error';
+  const dupIdx = isTerminal
+    ? state.messages.findIndex((m) => m.role === 'assistant' && (m.status === 'completed' || m.status === 'error'))
+    : state.messages.findIndex(
+        (m) => m.role === 'assistant' && m.step === message.step && m.status !== 'completed' && m.status !== 'error',
+      );
   const messages = dupIdx >= 0
     ? state.messages.map((m, i) => (i === dupIdx
         ? { ...m, content: message.content || m.content, status: message.status, percent: message.percent, assets: message.assets.length ? message.assets : m.assets }
