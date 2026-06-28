@@ -84,6 +84,9 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const [showModelPanel, setShowModelPanel] = useState(false);
   const [showSkills, setShowSkills] = useState(false);
   const [thinkOpen, setThinkOpen] = useState(true);
+  // 图生视频:技能选中后挑选源图
+  const [skillPicker, setSkillPicker] = useState<{ prompt: string } | null>(null);
+  const [skillImages, setSkillImages] = useState<string[]>([]);
   const [agentMode, setAgentMode] = useState<AgentMode>('agent');
   const [activeModelKind, setActiveModelKind] = useState<'image' | 'video' | '3d'>('image');
   const [autoModel, setAutoModel] = useState(true);
@@ -180,7 +183,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     }
   };
 
-  const runGeneration = async (prompt: string, brief?: object, modeOverride?: AgentMode) => {
+  const runGeneration = async (prompt: string, brief?: object, modeOverride?: AgentMode, refOverride?: string) => {
     const mode = modeOverride || agentMode;
     if (mode === 'agent' && !brief) { void runChat(prompt); return; }
     const promptWithContext = chatAssetContext?.image_url
@@ -218,8 +221,8 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         auto_model: autoModel,
         agent_mode: mode,
         brief,
-        // 图生视频/图生图:优先 brief 指定 > 上传图 > 对话中关联的画布图(chatAssetContext)
-        reference_image_url: ((brief as any)?.reference_image_url as string | undefined) ?? refUrl ?? chatAssetContext?.image_url,
+        // 图生视频/图生图:优先 显式源图 > brief 指定 > 上传图 > 对话关联图
+        reference_image_url: refOverride ?? ((brief as any)?.reference_image_url as string | undefined) ?? refUrl ?? chatAssetContext?.image_url,
       } as Parameters<typeof api.generation.quickGenerate>[0] & { agent_mode: AgentMode });
       onTaskStarted?.(task.task_id);
 
@@ -484,6 +487,39 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
 
   return (
     <div data-ai-chat-panel="true" className={`flex flex-col h-full ${bg} border-l ${isLight ? 'border-gray-200' : 'border-white/5'}`}>
+      {skillPicker && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4" onClick={() => setSkillPicker(null)}>
+          <div className={`w-full max-w-md rounded-2xl border p-4 ${isLight ? 'border-gray-200 bg-white' : 'border-white/10 bg-[#15161c]'}`} onClick={(e) => e.stopPropagation()}>
+            <div className={`mb-3 text-sm font-semibold ${textColor}`}>选择源图做「图生视频」</div>
+            {skillImages.length > 0 ? (
+              <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto">
+                {skillImages.map((u, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => { const pr = skillPicker.prompt; setSkillPicker(null); setAgentMode('video-gen'); runGeneration(pr, undefined, 'video-gen', u); }}
+                    className="overflow-hidden rounded-lg border border-black/10 transition hover:border-orange-400/60"
+                  >
+                    <img src={u} alt="" className="aspect-square w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className={`py-6 text-center text-xs ${subText}`}>画布暂无可用图片,可直接文生视频</div>
+            )}
+            <div className="mt-3 flex justify-end gap-2">
+              <button type="button" onClick={() => setSkillPicker(null)} className={`rounded-lg px-3 py-1.5 text-xs ${subText}`}>取消</button>
+              <button
+                type="button"
+                onClick={() => { const pr = skillPicker.prompt; setSkillPicker(null); setAgentMode('video-gen'); runGeneration(pr, undefined, 'video-gen'); }}
+                className="rounded-lg bg-gradient-to-r from-orange-500 to-rose-500 px-3 py-1.5 text-xs font-medium text-white"
+              >
+                直接文生视频
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ── Header: project name + action icons ── */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
         <div className="flex items-center gap-3">
@@ -590,10 +626,23 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                   isLight={!!isLight}
                   onClose={() => setShowSkills(false)}
                   onSelectSkill={(p, cat) => {
-                    const m: AgentMode = cat === 'Video' ? 'video-gen' : 'image-gen';
-                    setAgentMode(m);
                     setShowSkills(false);
-                    runGeneration(p, undefined, m);
+                    if (cat === 'Video') {
+                      // 图生视频:先让用户挑画布上的源图
+                      api.atelierCanvas.getAssets(projectId)
+                        .then((resp: any) => {
+                          const items = Array.isArray(resp) ? resp : (resp?.assets || resp?.elements || resp?.images || []);
+                          const urls = (items as any[])
+                            .map((it) => it?.url || it?.image_url || it?.preview_url || it?.thumbnail_url)
+                            .filter((u: unknown): u is string => typeof u === 'string' && /^(https?:|\/)/.test(u));
+                          setSkillImages(Array.from(new Set(urls)));
+                          setSkillPicker({ prompt: p });
+                        })
+                        .catch(() => { setSkillImages([]); setSkillPicker({ prompt: p }); });
+                    } else {
+                      setAgentMode('image-gen');
+                      runGeneration(p, undefined, 'image-gen');
+                    }
                   }}
                 />
               </div>
