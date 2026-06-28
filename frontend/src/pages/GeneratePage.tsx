@@ -496,6 +496,8 @@ export default function GeneratePage() {
                         setViewMode('canvas');
                         setPanelOpen(false);
                       }}
+                      // 图二:对话生成的图片已落库为画布元素,刷新无限画布即可看到
+                      onCanvasShouldRefresh={() => setCanvasRefreshNonce(n => n + 1)}
                       skillPromptSelected={pendingSkillPrompt}
                       onSkillPromptConsumed={() => setPendingSkillPrompt(null)}
                     />
