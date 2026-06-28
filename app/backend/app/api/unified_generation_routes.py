@@ -312,6 +312,10 @@ async def _quick_generate_video_asset(req, brief: dict) -> dict:
 
     model, options = _selected_video_model(req)
     options.setdefault("resolution", resolution)
+    # 图生视频:有参考图(画布源图)时作为首帧,启用 I2V(Seedance 等 vendor 支持),
+    # 让视频以该图为原型;无源图则退回文生视频。
+    if req.reference_image_url:
+        options.setdefault("first_frame_url", req.reference_image_url)
     vreq = VideoGenerationRequest(
         provider="dataeyes",
         prompt=prompt,
