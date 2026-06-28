@@ -130,12 +130,6 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   };
 
   const clearUploadedFile = () => setUploadedFile(null);
-  const uploadReferenceImage = async (file: File): Promise<string> => {
-    const form = new FormData();
-    form.append("file", file);
-    const result = await api.upload.image(form);
-    return result?.url || "";
-  };
 
   const runChat = async (prompt: string) => {
     const promptWithContext = chatAssetContext?.image_url
