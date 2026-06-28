@@ -19,7 +19,6 @@ import { api, getToken } from '../api/client';
 import ModelPreferencePanel from './model/ModelPreferencePanel';
 import SkillsPopup from './SkillsPopup';
 import MessageRenderer from './MessageRenderer';
-import BusinessBriefDrawer from './BusinessBriefDrawer';
 import { chatReducer, initialChatState } from '../lib/sse/chatReducer';
 import { sseToChatEventAdapter } from '../lib/sse/sseToChatEventAdapter';
 
@@ -86,7 +85,6 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const [showSkills, setShowSkills] = useState(false);
   const [thinkOpen, setThinkOpen] = useState(true);
   const [agentMode, setAgentMode] = useState<AgentMode>('agent');
-  const [genMode, setGenMode] = useState<'quick' | 'business'>('quick');
   const [activeModelKind, setActiveModelKind] = useState<'image' | 'video' | '3d'>('image');
   const [autoModel, setAutoModel] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -188,8 +186,9 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     }
   };
 
-  const runGeneration = async (prompt: string, brief?: object) => {
-    if (agentMode === 'agent' && !brief) { void runChat(prompt); return; }
+  const runGeneration = async (prompt: string, brief?: object, modeOverride?: AgentMode) => {
+    const mode = modeOverride || agentMode;
+    if (mode === 'agent' && !brief) { void runChat(prompt); return; }
     const promptWithContext = chatAssetContext?.image_url
       ? `${prompt}\n\n参考图片: ${chatAssetContext.image_url}`
       : prompt;
@@ -223,7 +222,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         image_provider: 'dataeyes',
         image_model: autoModel ? undefined : selectedModel || undefined,
         auto_model: autoModel,
-        agent_mode: agentMode,
+        agent_mode: mode,
         brief,
         reference_image_url: ((brief as any)?.reference_image_url as string | undefined) ?? refUrl,
       } as Parameters<typeof api.generation.quickGenerate>[0] & { agent_mode: AgentMode });
@@ -508,18 +507,6 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         </div>
       )}
 
-      {/* ── Mode toggle ── */}
-      <div className="px-4 pt-3">
-        <div className={`inline-flex gap-1 rounded-lg p-0.5 ${isLight ? 'bg-gray-100' : 'bg-white/5'}`}>
-          {(['quick','business'] as const).map((m) => (
-            <button key={m} type="button" onClick={() => setGenMode(m)}
-              className={`rounded-md px-3 py-1 text-xs ${genMode===m ? (isLight?'bg-white font-medium shadow-sm':'bg-white/10 font-medium') : (isLight?'text-gray-500':'text-gray-400')}`}>
-              {m === 'quick' ? '快速图视频' : '商务图视频'}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* ── Messages area ── */}
       <div data-ai-chat-messages="true" className={`flex-1 overflow-y-auto px-5 py-2 ${hasProgressMessages ? 'space-y-3' : 'space-y-4'}`}>
         {chatAssetContext && (
@@ -564,15 +551,6 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
               <MessageRenderer key={msg.id} message={msg} isLight={isLight} />
             ))}
           </>
-        ) : genMode === 'business' ? (
-          <BusinessBriefDrawer
-            isLight={isLight ?? false}
-            onSubmit={(brief) => runGeneration(`${brief.product_name}（商务图视频）`, brief)}
-              uploadImage={uploadReferenceImage}
-              fetchBrand={() => api.library.brand()}
-              fetchProducts={() => api.library.products()}
-              fetchProductDetail={(id) => api.library.product(id)}
-          />
         ) : null}
 
         <div ref={bottomRef} />
@@ -616,7 +594,12 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                 <SkillsPopup
                   isLight={!!isLight}
                   onClose={() => setShowSkills(false)}
-                  onSelectSkill={(p) => { setInput((prev) => (prev ? prev + '\n' + p : p)); setShowSkills(false); }}
+                  onSelectSkill={(p, cat) => {
+                    const m: AgentMode = cat === 'Video' ? 'video-gen' : 'image-gen';
+                    setAgentMode(m);
+                    setShowSkills(false);
+                    runGeneration(p, undefined, m);
+                  }}
                 />
               </div>
             </>

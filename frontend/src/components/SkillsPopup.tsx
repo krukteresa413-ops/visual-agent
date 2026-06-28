@@ -4,7 +4,7 @@ import { api } from '../api/client';
 interface Props {
   isLight: boolean;
   onClose: () => void;
-  onSelectSkill?: (prompt: string) => void;
+  onSelectSkill?: (prompt: string, category: string) => void;
   anchorEl?: HTMLElement | null;
 }
 
@@ -101,7 +101,7 @@ export default function SkillsPopup({ isLight, onClose, onSelectSkill, anchorEl 
             key={skill.id}
             onClick={() => {
               if (skill.prompt && onSelectSkill) {
-                onSelectSkill(skill.prompt);
+                onSelectSkill(skill.prompt, skill.category);
                 onClose();
               }
             }}
