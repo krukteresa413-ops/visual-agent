@@ -361,7 +361,10 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
   const handleImageAction = useCallback(async (id: string) => {
     const node = selectedActionNode;
     if (!node) return;
-    const url = (node.data?.url || node.data?.preview_url) as string | undefined;
+    // 图二:画布节点把图存在 thumbnail_url / asset_ref.url(AssetNode 即用此渲染),
+    // 旧代码只读 url/preview_url -> 永远 undefined -> 下载/抠图点了没反应。健壮取值。
+    const assetRef = node.data?.asset_ref as { url?: string } | undefined;
+    const url = (node.data?.thumbnail_url || node.data?.url || node.data?.preview_url || assetRef?.url) as string | undefined;
     if (id === 'download') {
       if (url) window.open(url, '_blank');
       return;

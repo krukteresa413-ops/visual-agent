@@ -100,22 +100,28 @@ async def generate_canvas_variant_asset(req: CanvasActionRequest, source: Canvas
 
     image_result = None
     last_err: Exception | None = None
+    # 图一:i2i 只有 dataeyes 一家,而它会间歇 503 -> 多试几次以提高成功率(不是「只能改一次」)
+    attempts = 3 if is_i2i else 1
     for prov in chain:
-        try:
-            r = await image_generation_service.generate(ImageGenerationRequest(
-                provider=prov,
-                prompt=gen_prompt,
-                model="gemini-2.5-flash-image" if prov == "dataeyes" else None,
-                width=1024,
-                height=1024,
-                options=image_options,
-            ))
-            if r.status == "succeeded" and r.images:
-                image_result = r
-                break
-        except Exception as e:  # noqa: BLE001 — 回退下一个 provider
-            last_err = e
-            continue
+        for attempt in range(attempts):
+            try:
+                r = await image_generation_service.generate(ImageGenerationRequest(
+                    provider=prov,
+                    prompt=gen_prompt,
+                    model="gemini-2.5-flash-image" if prov == "dataeyes" else None,
+                    width=1024,
+                    height=1024,
+                    options=image_options,
+                ))
+                if r.status == "succeeded" and r.images:
+                    image_result = r
+                    break
+            except Exception as e:  # noqa: BLE001 — 重试 / 回退下一个 provider
+                last_err = e
+            if attempt < attempts - 1:
+                await asyncio.sleep(1.0)
+        if image_result is not None:
+            break
     if image_result is None or not image_result.images:
         if is_i2i:
             raise RuntimeError(f"图生图暂不可用:支持图像编辑的服务(dataeyes)未响应,请稍后重试 ({last_err})")
