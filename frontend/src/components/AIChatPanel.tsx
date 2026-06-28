@@ -85,7 +85,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const [showSkills, setShowSkills] = useState(false);
   const [thinkOpen, setThinkOpen] = useState(true);
   // 图生视频:技能选中后挑选源图
-  const [skillPicker, setSkillPicker] = useState<{ prompt: string } | null>(null);
+  const [skillPicker, setSkillPicker] = useState<{ prompt: string; mode: AgentMode } | null>(null);
   const [skillImages, setSkillImages] = useState<string[]>([]);
   const [agentMode, setAgentMode] = useState<AgentMode>('agent');
   const [activeModelKind, setActiveModelKind] = useState<'image' | 'video' | '3d'>('image');
@@ -490,14 +490,16 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
       {skillPicker && (
         <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 p-4" onClick={() => setSkillPicker(null)}>
           <div className={`w-full max-w-md rounded-2xl border p-4 ${isLight ? 'border-gray-200 bg-white' : 'border-white/10 bg-[#15161c]'}`} onClick={(e) => e.stopPropagation()}>
-            <div className={`mb-3 text-sm font-semibold ${textColor}`}>选择源图做「图生视频」</div>
+            <div className={`mb-3 text-sm font-semibold ${textColor}`}>
+              选择源图{skillPicker.mode === 'video-gen' ? '做「图生视频」' : '应用此技能'}<span className={`ml-1 text-xs font-normal ${subText}`}>(可选)</span>
+            </div>
             {skillImages.length > 0 ? (
               <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto">
                 {skillImages.map((u, i) => (
                   <button
                     key={i}
                     type="button"
-                    onClick={() => { const pr = skillPicker.prompt; setSkillPicker(null); setAgentMode('video-gen'); runGeneration(pr, undefined, 'video-gen', u); }}
+                    onClick={() => { const { prompt: pr, mode } = skillPicker; setSkillPicker(null); setAgentMode(mode); runGeneration(pr, undefined, mode, u); }}
                     className="overflow-hidden rounded-lg border border-black/10 transition hover:border-orange-400/60"
                   >
                     <img src={u} alt="" className="aspect-square w-full object-cover" />
@@ -505,16 +507,16 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                 ))}
               </div>
             ) : (
-              <div className={`py-6 text-center text-xs ${subText}`}>画布暂无可用图片,可直接文生视频</div>
+              <div className={`py-6 text-center text-xs ${subText}`}>画布暂无可用图片,可直接生成</div>
             )}
             <div className="mt-3 flex justify-end gap-2">
               <button type="button" onClick={() => setSkillPicker(null)} className={`rounded-lg px-3 py-1.5 text-xs ${subText}`}>取消</button>
               <button
                 type="button"
-                onClick={() => { const pr = skillPicker.prompt; setSkillPicker(null); setAgentMode('video-gen'); runGeneration(pr, undefined, 'video-gen'); }}
+                onClick={() => { const { prompt: pr, mode } = skillPicker; setSkillPicker(null); setAgentMode(mode); runGeneration(pr, undefined, mode); }}
                 className="rounded-lg bg-gradient-to-r from-orange-500 to-rose-500 px-3 py-1.5 text-xs font-medium text-white"
               >
-                直接文生视频
+                直接生成
               </button>
             </div>
           </div>
@@ -627,22 +629,18 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                   onClose={() => setShowSkills(false)}
                   onSelectSkill={(p, cat) => {
                     setShowSkills(false);
-                    if (cat === 'Video') {
-                      // 图生视频:先让用户挑画布上的源图
-                      api.atelierCanvas.getAssets(projectId ?? 2)
-                        .then((resp: any) => {
-                          const items = Array.isArray(resp) ? resp : (resp?.assets || resp?.elements || resp?.images || []);
-                          const urls = (items as any[])
-                            .map((it) => it?.url || it?.image_url || it?.preview_url || it?.thumbnail_url)
-                            .filter((u: unknown): u is string => typeof u === 'string' && /^(https?:|\/)/.test(u));
-                          setSkillImages(Array.from(new Set(urls)));
-                          setSkillPicker({ prompt: p });
-                        })
-                        .catch(() => { setSkillImages([]); setSkillPicker({ prompt: p }); });
-                    } else {
-                      setAgentMode('image-gen');
-                      runGeneration(p, undefined, 'image-gen');
-                    }
+                    // 所有技能都先让用户挑画布源图(抠图/换色/详情页/图生视频 等均基于已有图);也可不选直接生成
+                    const m: AgentMode = cat === 'Video' ? 'video-gen' : 'image-gen';
+                    api.atelierCanvas.getAssets(projectId ?? 2)
+                      .then((resp: any) => {
+                        const items = Array.isArray(resp) ? resp : (resp?.assets || resp?.elements || resp?.images || []);
+                        const urls = (items as any[])
+                          .map((it) => it?.url || it?.image_url || it?.preview_url || it?.thumbnail_url)
+                          .filter((u: unknown): u is string => typeof u === 'string' && /^(https?:|\/)/.test(u));
+                        setSkillImages(Array.from(new Set(urls)));
+                        setSkillPicker({ prompt: p, mode: m });
+                      })
+                      .catch(() => { setSkillImages([]); setSkillPicker({ prompt: p, mode: m }); });
                   }}
                 />
               </div>

@@ -28,7 +28,8 @@ export default function ImageActionBar({ left, top, onAction, busy }: Props) {
           key={action.id}
           data-image-action={action.id}
           type="button"
-          onClick={() => onAction?.(action.id)}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onAction?.(action.id); }}
           disabled={busy === action.id}
           className={
             'h-8 rounded-md px-2 text-[11px] transition-colors disabled:opacity-40 ' +
