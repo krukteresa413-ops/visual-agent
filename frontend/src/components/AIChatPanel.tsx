@@ -629,7 +629,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                     setShowSkills(false);
                     if (cat === 'Video') {
                       // 图生视频:先让用户挑画布上的源图
-                      api.atelierCanvas.getAssets(projectId)
+                      api.atelierCanvas.getAssets(projectId ?? 2)
                         .then((resp: any) => {
                           const items = Array.isArray(resp) ? resp : (resp?.assets || resp?.elements || resp?.images || []);
                           const urls = (items as any[])
