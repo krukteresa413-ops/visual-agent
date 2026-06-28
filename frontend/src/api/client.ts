@@ -194,6 +194,14 @@ export const api = {
       client.post<CreateOrderResponse>('/payment/alipay/create', { amount_fen: amountFen }).then(r => r.data),
   },
 
+  // Vision (图二 识别图片内容 -> 预填问卷)
+  vision: {
+    briefSuggest: (imageUrl: string) =>
+      client.post<{ success: boolean; fields: Record<string, unknown>; error?: string }>(
+        '/vision/brief-suggest', { image_url: imageUrl },
+      ).then(r => r.data),
+  },
+
   // Library
   library: {
     brand: (tenantId?: number) =>

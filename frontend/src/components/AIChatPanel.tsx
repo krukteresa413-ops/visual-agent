@@ -106,6 +106,8 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const [qaAnswers, setQaAnswers] = useState<Record<string, AnswerValue>>({});
   const [qaMulti, setQaMulti] = useState<string[]>([]);
   const [qaDone, setQaDone] = useState(false); // 本会话已走过一次问卷后,后续直接对话
+  const [qaSourceImage, setQaSourceImage] = useState<string | null>(null); // 图二:作答用的源图(上传/画布),也作生成参考图
+  const [qaRecognizing, setQaRecognizing] = useState(false); // 图二:正在识别图片预填
   const [activeModelKind, setActiveModelKind] = useState<'image' | 'video' | '3d'>('image');
   const [autoModel, setAutoModel] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -261,11 +263,17 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
             window.clearInterval(poll);
             setCurrentPercent(100);
             setIsStreaming(false);
-            dispatch({ type: 'assistantStatus', step: '完成', content: '已生成第一版素材并同步到画布。', status: 'completed', percent: 100 });
+            // 图一:视频是异步提交,出片需数分钟 —— 完成文案要如实区分,不要谎称「已生成」
+            const gen = latest.generation as { modality?: string; video?: { url?: string } } | undefined;
+            const isVideo = gen?.modality === 'video' || (!!gen?.video && !gen?.video?.url);
+            const doneMsg = isVideo
+              ? '视频已提交,正在渲染中(约需数分钟),完成后会自动出现在画布。'
+              : '已生成第一版素材并同步到画布。';
+            dispatch({ type: 'assistantStatus', step: '完成', content: doneMsg, status: 'completed', percent: 100 });
             setMessages(prev => [...prev, {
               id: msgIdRef.current++,
               step: '完成',
-              message: '已生成第一版素材并同步到画布。',
+              message: doneMsg,
               status: 'done',
               percent: 100,
               timestamp: Date.now(),
@@ -303,25 +311,59 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   };
 
   // ── 图一:AI 追问问卷 ──
-  const startQuestionnaire = (seed: string) => {
+  // 找从 from 起第一个仍为空的题(用于跳过已识别/已答字段)
+  const firstUnansweredFrom = (answers: Record<string, AnswerValue>, from: number) => {
+    let i = from;
+    while (i < TEMPLATE_QUESTIONS.length && !isBlank(answers[TEMPLATE_QUESTIONS[i].key])) i += 1;
+    return i;
+  };
+
+  const startQuestionnaire = async (seed: string) => {
+    // 图二:作答用的源图(本地上传 > 画布关联图),既用于识别预填,也作为最终生成的参考图
+    const imgUrl = (uploadedFile?.type === 'image' ? uploadedFile.url : undefined) || chatAssetContext?.image_url || null;
     setQaSeed(seed);
-    setQaAnswers({});
-    setQaIndex(0);
     setQaMulti([]);
     setQaActive(true);
     setInput('');
+    setQaSourceImage(imgUrl);
+    setQaAnswers({});
+    setQaIndex(0);
+    if (!imgUrl) return;
+    // 识别图片内容,预填基础字段,跳到第一个未填项
+    setQaRecognizing(true);
+    try {
+      const res = await api.vision.briefSuggest(imgUrl);
+      if (res?.success && res.fields) {
+        const filled: Record<string, AnswerValue> = {};
+        for (const q of TEMPLATE_QUESTIONS) {
+          const raw = res.fields[q.key] as AnswerValue | undefined;
+          if (raw === undefined) continue;
+          const v = normalizeAnswer(q, raw);
+          if (!isBlank(v)) filled[q.key] = v;
+        }
+        setQaAnswers(filled);
+        const idx = firstUnansweredFrom(filled, 0);
+        if (idx >= TEMPLATE_QUESTIONS.length) finishQuestionnaire(filled);
+        else setQaIndex(idx);
+      }
+    } catch {
+      // 识别失败 -> 退回纯手动问卷
+    } finally {
+      setQaRecognizing(false);
+    }
   };
 
   const finishQuestionnaire = (answers: Record<string, AnswerValue>) => {
     setQaActive(false);
     setQaDone(true);
     const { brief, prompt } = buildBriefFromAnswers(answers, qaSeed);
-    void runGeneration(prompt, brief, 'image-gen');
+    // 图二:把源图作为生成参考图(图像=风格参考;视频=首帧 I2V)
+    void runGeneration(prompt, brief, 'image-gen', qaSourceImage || undefined);
   };
 
-  // 记录(或跳过)当前题答案,推进到下一题;走完则组装 brief 自动生成
+  // 记录(或跳过)当前题答案,推进到下一题(跳过已识别/已填项);走完则组装 brief 自动生成
   const advanceWith = (answers: Record<string, AnswerValue>) => {
-    const next = qaIndex + 1;
+    const next = firstUnansweredFrom(answers, qaIndex + 1);
     if (next < TEMPLATE_QUESTIONS.length) {
       setQaAnswers(answers);
       setQaIndex(next);
@@ -348,10 +390,10 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const handleSubmit = async () => {
     if (isStreaming) return;
     const prompt = input.trim();
-    if (qaActive) { recordAnswer(prompt); return; }
+    if (qaActive) { if (!qaRecognizing) recordAnswer(prompt); return; }
     if (!prompt) return;
     // Agent 模式首次创作 -> 进入模板追问;已问过本会话或图生图/视频模式 -> 原行为
-    if (agentMode === 'agent' && !qaDone) { startQuestionnaire(prompt); return; }
+    if (agentMode === 'agent' && !qaDone) { void startQuestionnaire(prompt); return; }
     runGeneration(prompt);
   };
 
@@ -657,7 +699,16 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
           </>
         ) : null}
 
-        {qaActive && (
+        {qaActive && qaRecognizing && (
+          <div className={`rounded-2xl border p-4 text-sm ${isLight ? 'border-gray-200 bg-white text-gray-700' : 'border-white/10 bg-white/[0.03] text-gray-200'}`}>
+            <span className="inline-flex items-center gap-2">
+              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-purple-400/40 border-t-purple-400" />
+              🖼 正在识别图片内容,自动填写基础信息…
+            </span>
+          </div>
+        )}
+
+        {qaActive && !qaRecognizing && (
           <QuestionnairePanel
             isLight={isLight}
             index={qaIndex}
