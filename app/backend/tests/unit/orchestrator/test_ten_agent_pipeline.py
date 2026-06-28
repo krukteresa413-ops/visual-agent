@@ -135,3 +135,12 @@ def test_build_generation_result_handles_empty():
     gen = build_generation_result({}, {})
     assert gen["main_image"] is None
     assert gen["scene_images"] == []
+
+
+def test_summarize_produces_real_conclusions():
+    from app.agents.orchestrator.pipeline import _summarize
+    assert "空山新品" in _summarize("copy", {"headline": "空山新品"})
+    assert "降级" in _summarize("copy", {"headline": "X", "source": "fallback"})
+    assert "provider" in _summarize("image", {"url": "/x.png", "provider": "dataeyes"})
+    assert _summarize("compliance", {"passed": True}) == "合规检查通过"
+    assert _summarize("unknown", {}) == "已完成"

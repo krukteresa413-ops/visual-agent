@@ -70,7 +70,8 @@ async def run_pipeline(
             summary.append({"key": key, "name": name, "status": "success"})
             # 用 "success"(非 "done")上报单 Agent 完成:避免 GenerationTracker SSE
             # 把单 Agent 的 done 当成整体终止而提前关闭流(导致进度卡在第一个 Agent)。
-            await progress(name, "success", "")
+            # message 带上该 Agent 的真实结论,形成具体的思考链(而非名词 ing 化)。
+            await progress(name, "success", _summarize(key, ctx.results[key]))
         except asyncio.TimeoutError:
             msg = f"超时(>{int(timeout_seconds)}s)"
             summary.append({"key": key, "name": name, "status": "failed", "error": msg})
@@ -123,6 +124,35 @@ def build_generation_result(brief: dict, results: Dict[str, dict]) -> dict:
         "video_scripts": [],
         "ad_material": {"hook": copy.get("headline", ""), "cta": copy.get("cta", "")},
     }
+
+
+def _summarize(key: str, output: dict) -> str:
+    """把单个 Agent 的产物浓缩成一句中文「思考结论」,用于真实的思考链展示。"""
+    o = output or {}
+    if key == "pm":
+        return f"已拆解交付物 {len(o.get('deliverables') or [])} 项 · 目标平台 {len(o.get('platforms') or [])} 个"
+    if key == "research":
+        kws = o.get("visual_keywords") or []
+        return f"行业「{o.get('industry', '')}」视觉关键词:{'、'.join(kws[:4]) or '已生成'}"
+    if key == "brand":
+        return "品牌定位:" + (o.get("tone_of_voice") or o.get("visual_style") or o.get("brand_tone") or "已确定配色与调性")
+    if key == "copy":
+        return "文案:" + (o.get("headline") or "已生成") + ("(模板降级)" if o.get("source") == "fallback" else "")
+    if key == "visual":
+        mb = (o.get("moodboard") or "").strip()
+        return ("视觉方向:" + mb[:40]) if mb else "已确定视觉风格与 Moodboard"
+    if key == "image":
+        return f"已生成主视觉(provider:{o.get('provider', '')})" if o.get("url") else "主视觉未产出"
+    if key == "layout":
+        return "已完成中文排版" + ("(模板降级)" if o.get("source") == "fallback" else "")
+    if key == "mockup":
+        return f"已套用「{o.get('mockup_type', '')}」场景 mockup" if o.get("url") else "Mockup 未产出"
+    if key == "compliance":
+        n = len(o.get("warnings") or [])
+        return "合规检查通过" if o.get("passed") else f"合规检查:{n} 处提示"
+    if key == "export":
+        return f"已整理可交付资产包({o.get('asset_count', 0)} 个资产)"
+    return "已完成"
 
 
 def _default_agents() -> Dict[str, Agent]:

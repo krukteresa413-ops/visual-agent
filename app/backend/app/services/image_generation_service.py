@@ -79,37 +79,16 @@ class LocalPlaceholderProvider(ImageGenerationProvider):
             b = 252
             draw.line([(0, y), (w, y)], fill=(r, g, b))
 
-        # Prompt text (truncated)
-        text = request.prompt[:80]
+        # 占位图不再渲染 prompt 文本:DejaVuSans 无中文字形,会把中文 prompt 画成乱码方块。
+        # 仅画一个居中的中性英文标签。
         try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=24)
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=22)
         except OSError:
             font = ImageFont.load_default()
-
-        # Word-wrap
-        lines = []
-        words = text.split()
-        line = ""
-        for word in words:
-            test = f"{line} {word}".strip()
-            if draw.textbbox((0, 0), test, font=font)[2] < w - 40:
-                line = test
-            else:
-                lines.append(line)
-                line = word
-        if line:
-            lines.append(line)
-
-        y_start = h // 3
-        for i, line in enumerate(lines):
-            bbox = draw.textbbox((0, 0), line, font=font)
-            tw = bbox[2] - bbox[0]
-            draw.text(
-                ((w - tw) // 2, y_start + i * 36),
-                line,
-                fill=(15, 23, 42),
-                font=font,
-            )
+        label = "image placeholder"
+        lbbox = draw.textbbox((0, 0), label, font=font)
+        lw = lbbox[2] - lbbox[0]
+        draw.text(((w - lw) // 2, h // 2 - 12), label, fill=(148, 163, 184), font=font)
 
         # Footer badge
         badge = f"{w}x{h} • local placeholder"
