@@ -16,8 +16,9 @@ router = APIRouter(prefix="/api/v1/canvas-actions", tags=["canvas-actions"])
 
 # 文生图(无源图)的回退链
 _IMAGE_CHAIN = ("dataeyes", "mige", "pollinations", "local")
-# 图生图(有源图)只用真正读 image_urls 的 provider,避免无视源图重画导致「整张图都变」
-_I2I_CHAIN = ("dataeyes",)
+# 图生图(有源图):只用真正读 image_urls(保真)的 DataEyes NanoBanana/Gemini 系模型,
+# 跨多个模型回退以抗单模型 503;绝不降级到无视源图的 pollinations/local。
+_I2I_MODELS = ("gemini-2.5-flash-image", "gemini-3-pro-image-preview", "gemini-2.5-flash-image-preview")
 
 _canvas_action_tasks: dict[str, dict[str, Any]] = {}
 
@@ -83,11 +84,6 @@ async def generate_canvas_variant_asset(req: CanvasActionRequest, source: Canvas
     if is_i2i:
         image_options["image_urls"] = [source.imageUrl]
 
-    # 图生图保真:只有 dataeyes 真正读源图(image_urls)做图像条件;pollinations/local
-    # 会无视源图按文字重画(导致「衣服全变」)。因此 img2img 只走 dataeyes,失败就
-    # 如实报错(前端给「服务不稳定,请重试」提示),绝不降级到会改掉整张图的 provider。
-    chain = _I2I_CHAIN if is_i2i else _IMAGE_CHAIN
-
     # 编辑式提示词:引导模型尽量保留原图其它部分,只改用户要求处
     if is_i2i:
         gen_prompt = (
@@ -98,30 +94,31 @@ async def generate_canvas_variant_asset(req: CanvasActionRequest, source: Canvas
     else:
         gen_prompt = req.instruction
 
+    # 图生图(有源图):跨多个保真 i2i 模型回退(都读 image_urls);文生图:provider 回退链。
+    # (provider, model) 列表
+    if is_i2i:
+        attempt_list = [("dataeyes", m) for m in _I2I_MODELS]
+    else:
+        attempt_list = [(p, "gemini-2.5-flash-image" if p == "dataeyes" else None) for p in _IMAGE_CHAIN]
+
     image_result = None
     last_err: Exception | None = None
-    # 图一:i2i 只有 dataeyes 一家,而它会间歇 503 -> 多试几次以提高成功率(不是「只能改一次」)
-    attempts = 3 if is_i2i else 1
-    for prov in chain:
-        for attempt in range(attempts):
-            try:
-                r = await image_generation_service.generate(ImageGenerationRequest(
-                    provider=prov,
-                    prompt=gen_prompt,
-                    model="gemini-2.5-flash-image" if prov == "dataeyes" else None,
-                    width=1024,
-                    height=1024,
-                    options=image_options,
-                ))
-                if r.status == "succeeded" and r.images:
-                    image_result = r
-                    break
-            except Exception as e:  # noqa: BLE001 — 重试 / 回退下一个 provider
-                last_err = e
-            if attempt < attempts - 1:
-                await asyncio.sleep(1.0)
-        if image_result is not None:
-            break
+    for prov, mdl in attempt_list:
+        try:
+            r = await image_generation_service.generate(ImageGenerationRequest(
+                provider=prov,
+                prompt=gen_prompt,
+                model=mdl,
+                width=1024,
+                height=1024,
+                options=image_options,
+            ))
+            if r.status == "succeeded" and r.images:
+                image_result = r
+                break
+        except Exception as e:  # noqa: BLE001 — 换下一个模型 / provider
+            last_err = e
+            continue
     if image_result is None or not image_result.images:
         if is_i2i:
             raise RuntimeError(f"图生图暂不可用:支持图像编辑的服务(dataeyes)未响应,请稍后重试 ({last_err})")

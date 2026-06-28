@@ -310,42 +310,52 @@ async def _quick_generate_video_asset(req, brief: dict) -> dict:
     if dur_match:
         duration = int(dur_match.group(1))
 
-    model, options = _selected_video_model(req)
-    options.setdefault("resolution", resolution)
-    # 图生视频:有参考图(画布源图)时作为首帧,启用 I2V(Seedance 等 vendor 支持),
-    # 让视频以该图为原型;无源图则退回文生视频。
-    if req.reference_image_url:
-        options.setdefault("first_frame_url", req.reference_image_url)
-    vreq = VideoGenerationRequest(
-        provider="dataeyes",
-        prompt=prompt,
-        duration=duration,
-        model=model,
-        options=options,
-    )
-    try:
-        # Submit only - video gen takes minutes, don't block quick-generate
-        # Submit only - video gen takes minutes, don't block quick-generate
-        # Submit only - video gen takes minutes, don't block quick-generate
-        # Submit only - video gen takes minutes, don't block quick-generate
-        # Submit only - video gen takes minutes, don't block quick-generate
-        result = await video_generation_service.generate(vreq)
-        return {
-            "video": {
-                "url": result.videos[0].url if result.videos else "",
-                "duration": duration,
-                "task_id": result.videos[0].provider_asset_id if result.videos else "",
-            },
-            "modality": "video",
-            "status": "submitted",
-            "message": "视频已提交，排队生成中",
-        }
-    except Exception as e:
-        return {
-            "video": {"url": "", "duration": duration, "error": str(e)},
-            "modality": "video",
-            "_note": "Video generation is being set up. Your request has been queued.",
-        }
+    model, base_options = _selected_video_model(req)
+    base_options.setdefault("resolution", resolution)
+
+    # DataEyesAI 聚合了多家视频厂商,均在同一网关下。跨厂商回退链:某家网关 503/失败
+    # 时自动换下一家,显著提升出片成功率。图生视频(有参考图)统一作为首帧 I2V。
+    # (platform, model) — 各厂商默认模型见 video_generation_service VENDORS
+    video_chain = [
+        ("seedance", model or "doubao-seedance-1-5-pro-251215"),
+        ("kling", "kling-v2-6"),
+        ("vidu", "viduq3-pro"),
+        ("hailuo", "MiniMax-Hailuo-2.3"),
+    ]
+    last_err = None
+    for platform, vmodel in video_chain:
+        options = dict(base_options)
+        options["platform"] = platform
+        if req.reference_image_url:
+            options["first_frame_url"] = req.reference_image_url
+        try:
+            result = await video_generation_service.generate(VideoGenerationRequest(
+                provider="dataeyes",
+                prompt=prompt,
+                duration=duration,
+                model=vmodel,
+                options=options,
+            ))
+            if result.videos and result.videos[0].url:
+                return {
+                    "video": {
+                        "url": result.videos[0].url,
+                        "duration": duration,
+                        "task_id": result.videos[0].provider_asset_id or "",
+                        "provider": platform,
+                    },
+                    "modality": "video",
+                    "status": "succeeded",
+                    "message": f"视频已生成(厂商:{platform})",
+                }
+        except Exception as e:  # noqa: BLE001 — 换下一家厂商
+            last_err = e
+            continue
+    return {
+        "video": {"url": "", "duration": duration, "error": str(last_err) if last_err else "视频厂商均不可用"},
+        "modality": "video",
+        "_note": "所有视频厂商暂不可用,请稍后重试。",
+    }
 
 
 async def _generate_quick_asset_for_modality(req, brief: dict, is_video_intent: bool, progress) -> dict:
