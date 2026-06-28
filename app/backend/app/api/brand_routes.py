@@ -272,6 +272,9 @@ def _brand_to_dict(p) -> dict:
         "forbidden_words": p.forbidden_words_list,
         "logo_url": p.logo_url,
         "tagline": p.tagline,
+        "target_audience": p.target_audience,
+        "product_images": p.product_images_list,
+        "memory_summary": p.memory_summary,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
     }
 
@@ -286,6 +289,9 @@ class BrandManualInput(BaseModel):
     visual_keywords: Optional[list[str]] = None
     forbidden_words: Optional[list[str]] = None
     tagline: Optional[str] = None
+    target_audience: Optional[str] = None
+    product_images: Optional[list[str]] = None
+    memory_summary: Optional[str] = None
 
 
 @router.get("/manage/list")
@@ -325,6 +331,9 @@ def create_brand_manual(req: BrandManualInput, db: Session = Depends(get_db)):
         visual_keywords=json.dumps(req.visual_keywords or [], ensure_ascii=False),
         forbidden_words=json.dumps(req.forbidden_words or [], ensure_ascii=False),
         tagline=req.tagline,
+        target_audience=req.target_audience,
+        product_images=json.dumps(req.product_images or [], ensure_ascii=False),
+        memory_summary=req.memory_summary,
     )
     db.add(p)
     db.commit()
@@ -347,6 +356,9 @@ def update_brand_manual(brand_id: int, req: BrandManualInput, db: Session = Depe
     p.visual_keywords = json.dumps(req.visual_keywords or [], ensure_ascii=False)
     p.forbidden_words = json.dumps(req.forbidden_words or [], ensure_ascii=False)
     p.tagline = req.tagline
+    p.target_audience = req.target_audience
+    p.product_images = json.dumps(req.product_images or [], ensure_ascii=False)
+    p.memory_summary = req.memory_summary
     db.commit()
     db.refresh(p)
     return _brand_to_dict(p)

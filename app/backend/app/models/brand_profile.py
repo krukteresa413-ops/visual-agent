@@ -21,6 +21,10 @@ class BrandProfile(Base):
     logo_url = Column(String(500), nullable=True)
     tagline = Column(String(500), nullable=True)
     brand_story = Column(Text, nullable=True)
+    # 品牌记忆字段(PRD 7.6/12.2 Brand Memory,借零件#4 对齐)— 支持跨项目复用
+    target_audience = Column(String(500), nullable=True)
+    product_images = Column(Text, nullable=True)   # JSON: ["url", ...]
+    memory_summary = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -30,6 +34,9 @@ class BrandProfile(Base):
     @property
     def forbidden_words_list(self) -> list:
         return json.loads(self.forbidden_words) if self.forbidden_words else []
+    @property
+    def product_images_list(self) -> list:
+        return json.loads(self.product_images) if self.product_images else []
     def to_prompt_context(self) -> str:
         parts = [f'品牌: {self.name}']
         if self.primary_color: parts.append(f'主色: {self.primary_color}')
@@ -37,5 +44,7 @@ class BrandProfile(Base):
         if self.font_style: parts.append(f'字体风格: {self.font_style}')
         if self.tone_of_voice: parts.append(f'语调: {self.tone_of_voice}')
         if self.visual_keywords: parts.append(f'视觉关键词: {" ".join(self.visual_keywords_list)}')
+        if self.target_audience: parts.append(f'目标用户: {self.target_audience}')
+        if self.memory_summary: parts.append(f'品牌记忆: {self.memory_summary}')
         if self.forbidden_words: parts.append(f'禁用词: {" ".join(self.forbidden_words_list)}')
         return '\n'.join(parts)
