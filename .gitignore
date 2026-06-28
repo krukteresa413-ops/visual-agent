@@ -54,3 +54,7 @@ backup-*/
 # Temp
 _probe/
 backups/
+app/backend/nohup.out
+*.bak_tu4_*
+_bak_*/
+*.env.bak*
