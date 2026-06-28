@@ -722,16 +722,26 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                     setShowSkills(false);
                     // 所有技能都先让用户挑画布源图(抠图/换色/详情页/图生视频 等均基于已有图);也可不选直接生成
                     const m: AgentMode = cat === 'Video' ? 'video-gen' : 'image-gen';
-                    api.atelierCanvas.getAssets(projectId ?? 2)
-                      .then((resp: any) => {
-                        const items = Array.isArray(resp) ? resp : (resp?.assets || resp?.elements || resp?.images || []);
-                        const urls = (items as any[])
-                          .map((it) => it?.url || it?.image_url || it?.preview_url || it?.thumbnail_url)
-                          .filter((u: unknown): u is string => typeof u === 'string' && /^(https?:|\/)/.test(u));
-                        setSkillImages(Array.from(new Set(urls)));
+                    const pid = projectId ?? 2;
+                    const pickUrl = (it: any): string | undefined =>
+                      it?.url || it?.image_url || it?.preview_url || it?.thumbnail_url || it?.asset_ref?.url;
+                    // 图一:资产库 + 画布状态(对话生成的图 seed 在 canvas-state elements)双来源合并
+                    Promise.allSettled([api.atelierCanvas.getAssets(pid), api.atelierCanvas.getState(pid)])
+                      .then((results) => {
+                        const urls: string[] = [];
+                        if (results[0].status === 'fulfilled') {
+                          const resp: any = results[0].value;
+                          const items = Array.isArray(resp) ? resp : (resp?.assets || resp?.elements || resp?.images || []);
+                          for (const it of items as any[]) { const u = pickUrl(it); if (u) urls.push(u); }
+                        }
+                        if (results[1].status === 'fulfilled') {
+                          const state: any = results[1].value;
+                          for (const el of (state?.elements || []) as any[]) { const u = pickUrl(el); if (u) urls.push(u); }
+                        }
+                        const valid = urls.filter((u): u is string => typeof u === 'string' && /^(https?:|\/)/.test(u));
+                        setSkillImages(Array.from(new Set(valid)));
                         setSkillPicker({ prompt: p, mode: m });
-                      })
-                      .catch(() => { setSkillImages([]); setSkillPicker({ prompt: p, mode: m }); });
+                      });
                   }}
                 />
               </div>

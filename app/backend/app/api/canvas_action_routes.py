@@ -14,6 +14,9 @@ from app.services.image_generation_service import image_generation_service
 
 router = APIRouter(prefix="/api/v1/canvas-actions", tags=["canvas-actions"])
 
+# 图二:二次编辑(img2img)的 provider 自动回退链
+_IMAGE_CHAIN = ("dataeyes", "mige", "pollinations", "local")
+
 _canvas_action_tasks: dict[str, dict[str, Any]] = {}
 
 
@@ -76,16 +79,28 @@ async def generate_canvas_variant_asset(req: CanvasActionRequest, source: Canvas
     image_options: dict[str, Any] = {}
     if source.imageUrl:
         image_options["image_urls"] = [source.imageUrl]
-    image_result = await image_generation_service.generate(ImageGenerationRequest(
-        provider="dataeyes",
-        prompt=req.instruction,
-        model="gemini-2.5-flash-image",
-        width=1024,
-        height=1024,
-        options=image_options,
-    ))
-    if image_result.status != "succeeded" or not image_result.images:
-        raise RuntimeError("图编辑生成失败：未返回图片")
+    # 图二:provider 自动回退链(与十 Agent Image / quick-generate 一致)。
+    # 单一 dataeyes 网关 503 时不再直接失败,降级到 mige/pollinations/local 仍出图。
+    image_result = None
+    last_err: Exception | None = None
+    for prov in _IMAGE_CHAIN:
+        try:
+            r = await image_generation_service.generate(ImageGenerationRequest(
+                provider=prov,
+                prompt=req.instruction,
+                model="gemini-2.5-flash-image" if prov == "dataeyes" else None,
+                width=1024,
+                height=1024,
+                options=image_options,
+            ))
+            if r.status == "succeeded" and r.images:
+                image_result = r
+                break
+        except Exception as e:  # noqa: BLE001 — 回退下一个 provider
+            last_err = e
+            continue
+    if image_result is None or not image_result.images:
+        raise RuntimeError(f"图编辑生成失败:所有图像 provider 不可用 ({last_err})")
     image_url = image_result.images[0].url
     asset_plan = {
         "project_id": req.project_id,
