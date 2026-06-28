@@ -76,6 +76,7 @@ def user_payload(user: User) -> dict:
         "phone": user.phone,
         "name": user.name,
         "role": user.role,
+        "credits": user.credits or 0,
     }
 
 

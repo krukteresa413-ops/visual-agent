@@ -15,6 +15,19 @@ export interface AuthUser {
   phone?: string | null;
   name: string;
   role: 'platform_admin' | 'tenant_admin' | 'member';
+  credits?: number;
+}
+
+export interface RechargeTier {
+  amount_fen: number;
+  credits: number;
+  label: string;
+}
+
+export interface CreateOrderResponse {
+  out_trade_no: string;
+  pay_url: string;
+  credits: number;
 }
 
 export interface AuthLoginResponse {
@@ -166,6 +179,19 @@ export const api = {
     register: (payload: { email?: string; phone?: string; password: string; name: string; tenant_name: string; role?: string }) =>
       client.post<AuthUser>('/auth/register', payload).then(r => r.data),
     me: () => client.get<AuthUser>('/auth/me').then(r => r.data),
+  },
+
+  // Credits (积分余额 / 充值订单)
+  credits: {
+    balance: () => client.get<{ credits: number }>('/credits/balance').then(r => r.data),
+    orders: () => client.get('/credits/orders').then(r => r.data),
+  },
+
+  // Payment (图四 支付宝沙箱)
+  payment: {
+    tiers: () => client.get<{ tiers: RechargeTier[] }>('/payment/tiers').then(r => r.data.tiers),
+    createAlipay: (amountFen: number) =>
+      client.post<CreateOrderResponse>('/payment/alipay/create', { amount_fen: amountFen }).then(r => r.data),
   },
 
   // Library
