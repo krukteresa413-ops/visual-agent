@@ -417,7 +417,7 @@ async def _quick_generate_image_asset(req, brief: dict) -> dict:
         raise HTTPException(status_code=502, detail=f"图片生成失败：所有 provider 均未返回 url（尝试 {chain}，最后错误：{last_err}）")
 
     provider_raw = image_result.raw or {}
-    requested_model = provider_raw.get("requested_model") or (None if req.auto_model else req.image_model) or "gemini-2.5-flash-image"
+    requested_model = provider_raw.get("requested_model") or (None if req.auto_model else req.image_model) or "gpt-image-2"
     provider_model = provider_raw.get("model") or requested_model
 
     return {

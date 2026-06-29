@@ -207,6 +207,33 @@ class TestDataEyesAIProvider:
         payload = mock_post.call_args.kwargs["json"]
         assert payload["model"] == "gpt-image-1-sp"
 
+    @patch("app.services.image_generation_service.UPLOAD_DIR", "/tmp/moyag-test-generated")
+    @patch("httpx.AsyncClient.post")
+    async def test_dataeyes_default_model_is_gpt_image_2(self, mock_post):
+        """图三: auto 路径不传 model 时, dataeyes 必须默认 gpt-image-2(而非 gemini/NanoBanana),
+        并走标准 /images/generations 端点。"""
+        import base64
+        from PIL import Image
+        import io
+
+        image = Image.new("RGB", (16, 16), color=(0, 128, 0))
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+        b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"created": 123, "data": [{"b64_json": b64}]}
+
+        provider = DataEyesAIImageProvider(api_key="test-key", base_url="https://cloud.dataeyes.ai/v1")
+        # 不传 model → 必须用 gpt-image-2
+        result = await provider.generate(ImageGenerationRequest(provider="dataeyes", prompt="好用的冰箱"))
+
+        # 必须走 /images/generations(openai 格式), 而非 nanobanana 的 /chat/completions
+        called_url = mock_post.call_args.args[0] if mock_post.call_args.args else mock_post.call_args.kwargs.get("url", "")
+        assert called_url == "/images/generations", f"应走 images 端点, 实际 {called_url}"
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["model"] == "gpt-image-2", f"默认模型应为 gpt-image-2, 实际 {payload['model']}"
+        assert result.raw.get("requested_model") == "gpt-image-2"
+
     async def test_dataeyes_model_selector_returns_verified_curated_models_only(self):
         provider = DataEyesAIImageProvider(api_key="test-key", base_url="https://cloud.dataeyes.ai/v1")
         remote = [

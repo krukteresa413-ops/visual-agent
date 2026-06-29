@@ -26,6 +26,10 @@ from app.models.image_generation_model import (
 
 UPLOAD_DIR = "/opt/visual-agent/uploads/generated"
 
+# 图三: DataEyes 自动出图默认模型。历史默认是 gemini-2.5-flash-image(NanoBanana),
+# 用户要求图片优先使用 gpt-image-2。集中一处定义, 可用 env 覆盖。
+DEFAULT_DATAEYES_IMAGE_MODEL = os.getenv("DATAEYES_DEFAULT_IMAGE_MODEL", "gpt-image-2")
+
 
 @dataclass(frozen=True)
 class ProviderDescriptor:
@@ -641,7 +645,7 @@ class DataEyesAIImageProvider(ImageGenerationProvider):
 
     async def generate(self, request: ImageGenerationRequest) -> ImageGenerationResult:
         client = self._get_client()
-        model = request.model or "gemini-2.5-flash-image"
+        model = request.model or DEFAULT_DATAEYES_IMAGE_MODEL
 
         # ── Format dispatch (Fix 2B) ──
         model_meta = self.MODEL_REGISTRY.get(model, {})
