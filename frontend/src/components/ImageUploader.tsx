@@ -14,7 +14,7 @@ export default function ImageUploader({ images, onChange, max = 5 }: Props) {
     setUploading(true);
     try {
       const form = new FormData(); form.append('file', file);
-      const { data } = await api.post('/api/v1/upload/image', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = await api.post('/upload/image', form, { headers: { 'Content-Type': 'multipart/form-data' } });
       onChange([...images, { filename: data.filename, url: data.url }]);
     } catch (err: any) { alert(err?.response?.data?.detail || '上传失败'); }
     finally { setUploading(false); if (fileRef.current) fileRef.current.value = ''; }
@@ -22,7 +22,7 @@ export default function ImageUploader({ images, onChange, max = 5 }: Props) {
 
   const remove = async (idx: number) => {
     const img = images[idx];
-    try { await api.delete('/api/v1/upload/image/' + img.filename); } catch {}
+    try { await api.delete('/upload/image/' + img.filename); } catch {}
     onChange(images.filter((_, i) => i !== idx));
   };
 

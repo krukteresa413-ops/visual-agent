@@ -135,3 +135,9 @@
 .light .border-gray-800 { border-color: rgba(0,0,0,0.08) !important; }
 .light .text-gray-400 { color: #555577 !important; }
 .light .text-gray-500 { color: #777799 !important; }
+
+/* ── textarea 在 light 模式补白底(高特异度 0,2,1 压过 .light .bg-white/[0.0x] 的 0,2,0 覆盖,修复深底深字看不见) ── */
+.light textarea:not([readonly]) {
+  background: #ffffff !important;
+  color: #1a1a2e !important;
+}

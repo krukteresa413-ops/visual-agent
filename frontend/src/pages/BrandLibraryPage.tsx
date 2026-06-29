@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import ImageUploader from '../components/ImageUploader';
 
 interface Brand {
   id: number;
@@ -17,6 +18,9 @@ interface Brand {
   forbidden_words?: string[];
   logo_url?: string | null;
   tagline?: string | null;
+  target_audience?: string | null;
+  memory_summary?: string | null;
+  product_images?: string[];
   updated_at?: string | null;
 }
 
@@ -29,6 +33,8 @@ const KIT_CARDS = [
   { icon: '⛉', label: '品牌指南', desc: 'VI 完整手册' },
 ];
 
+type Img = { filename: string; url: string };
+
 type FormState = {
   name: string;
   primary_color: string;
@@ -39,11 +45,15 @@ type FormState = {
   tagline: string;
   visual_keywords: string; // 逗号分隔
   forbidden_words: string; // 逗号分隔
+  target_audience: string;
+  memory_summary: string;
+  product_images: Img[];
 };
 
 const EMPTY_FORM: FormState = {
   name: '', primary_color: '#FB923C', secondary_color: '#1F2937', accent_color: '#F43F5E',
   font_style: '', tone_of_voice: '', tagline: '', visual_keywords: '', forbidden_words: '',
+  target_audience: '', memory_summary: '', product_images: [],
 };
 
 const splitTags = (s: string) => s.split(/[,，\n]/).map((x) => x.trim()).filter(Boolean);
@@ -87,6 +97,9 @@ export default function BrandLibraryPage() {
       tagline: b.tagline || '',
       visual_keywords: (b.visual_keywords || []).join('，'),
       forbidden_words: (b.forbidden_words || []).join('，'),
+      target_audience: b.target_audience || '',
+      memory_summary: b.memory_summary || '',
+      product_images: (b.product_images || []).map((url) => ({ url, filename: url.split('/').pop() || '' })),
     });
     setDialogOpen(true);
   };
@@ -104,6 +117,9 @@ export default function BrandLibraryPage() {
       tagline: form.tagline || null,
       visual_keywords: splitTags(form.visual_keywords),
       forbidden_words: splitTags(form.forbidden_words),
+      target_audience: form.target_audience.trim() || null,
+      memory_summary: form.memory_summary.trim() || null,
+      product_images: form.product_images.map((i) => i.url),
     };
     try {
       if (editing) {
@@ -262,6 +278,21 @@ export default function BrandLibraryPage() {
                     </div>
                   ) : <Empty />}
                 </InfoCard>
+                <InfoCard title="目标用户">
+                  <div className="text-sm text-gray-200">{selected.target_audience || <Empty />}</div>
+                </InfoCard>
+                <InfoCard title="品牌记忆">
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{selected.memory_summary || <Empty />}</div>
+                </InfoCard>
+                <InfoCard title="产品图">
+                  {selected.product_images?.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selected.product_images.map((url, i) => (
+                        <img key={i} src={url} alt={'产品图' + (i + 1)} className="size-16 rounded-lg border border-white/15 object-cover" />
+                      ))}
+                    </div>
+                  ) : <Empty />}
+                </InfoCard>
               </div>
             </>
           ) : !loading ? (
@@ -312,6 +343,13 @@ export default function BrandLibraryPage() {
               <Field label="禁用词 / 禁用风格（逗号分隔）">
                 <input value={form.forbidden_words} onChange={(e) => setForm({ ...form, forbidden_words: e.target.value })} placeholder="廉价, 花哨" className={inputCls} />
               </Field>
+              <Field label="目标用户">
+                <input value={form.target_audience} onChange={(e) => setForm({ ...form, target_audience: e.target.value })} placeholder="例如：25-35岁一线城市女性，注重品质与设计感" className={inputCls} />
+              </Field>
+              <Field label="品牌记忆 / Memory">
+                <textarea value={form.memory_summary} onChange={(e) => setForm({ ...form, memory_summary: e.target.value })} placeholder="品牌核心记忆点、历史沉淀、调性…后续生成自动复用" className={textareaCls} rows={3} />
+              </Field>
+              <ImageUploader images={form.product_images} onChange={(imgs) => setForm({ ...form, product_images: imgs })} />
             </div>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setDialogOpen(false)} disabled={saving} className="rounded-lg border border-white/[0.12] px-4 py-2 text-sm text-gray-300 disabled:opacity-50">取消</button>
@@ -325,6 +363,7 @@ export default function BrandLibraryPage() {
 }
 
 const inputCls = 'h-9 w-full rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 text-sm text-white placeholder:text-gray-600 outline-none transition-colors focus:border-orange-400/40';
+const textareaCls = 'w-full rounded-lg border border-white/[0.1] bg-white/[0.04] px-3 py-2 text-sm text-white placeholder:text-gray-600 outline-none transition-colors focus:border-orange-400/40 resize-none';
 
 function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
