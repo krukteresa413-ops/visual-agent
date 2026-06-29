@@ -38,7 +38,8 @@ export default function GeneratePage() {
   const [viewMode, setViewMode] = useState<'tabs' | 'canvas'>('canvas');
   const [uploadedImages, setUploadedImages] = useState<Array<{filename:string;url:string}>>([]);
   const [panelOpen, setPanelOpen] = useState(false);  // form panel expanded?
-  const [rightPanel, setRightPanel] = useState<'chat' | 'brand' | null>('chat');  // 默认展开AI对话  // right side panel
+  const [rightPanel, setRightPanel] = useState<'chat' | 'library' | null>('chat');  // 默认展开AI对话  // right side panel
+  const [libraryAdd, setLibraryAdd] = useState<{ id: string; type: string; label: string; url: string } | null>(null);  // 资料库 -> 画布 待加项
   const [chatAssetContext, setChatAssetContext] = useState<ChatAssetContext | null>(null);
   const [genTaskId, setGenTaskId] = useState<string | null>(null);
   const [canvasRefreshNonce, setCanvasRefreshNonce] = useState(0);
@@ -507,7 +508,9 @@ export default function GeneratePage() {
                   <div className="flex-1 overflow-auto">
                     <LibraryPanel
                       projectId={Number(pid)}
+                      isLight={isLight}
                       hasUploadedPdf={false}
+                      onAddToCanvas={(item) => setLibraryAdd(item)}
                       onClose={() => setRightPanel(null)}
                     />
                   </div>
@@ -524,6 +527,8 @@ export default function GeneratePage() {
                 qualityReport={qualityReport}
                 onAddToChat={addCanvasAssetToChat}
                 onEditPrompt={editPromptFromHistory}
+                libraryAddRequest={libraryAdd}
+                onLibraryAddConsumed={() => setLibraryAdd(null)}
               />
               {/* B 联动:全自动(十 Agent 编排)时,画布浮层显示真实具名 Agent 状态流 */}
               {orchestrateMode && isGenerating && genTaskId && (

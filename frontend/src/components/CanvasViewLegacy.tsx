@@ -28,6 +28,9 @@ interface CanvasViewProps {
   onAddToChat?: (asset: CanvasChatAsset) => void;
   onEditPrompt?: (prompt: string) => void;
   canvasRefreshNonce?: number;
+  // 资料库 -> 画布:父级置入待加项(按钮路径),消费后回调清空
+  libraryAddRequest?: { id: string; type: string; label: string; url: string } | null;
+  onLibraryAddConsumed?: () => void;
 }
 
 interface CanvasElement {
@@ -686,7 +689,7 @@ function LovartCanvasToolbar() {
 // ── Main CanvasView ─────────────────────────────────────────────
 
 export default function CanvasView({
-  mainImage, whiteBg, sceneImages, sellingPoints, videoScripts, adMaterial, brief, projectId, isLight, generationTaskId, qualityReport, onAddToChat, onEditPrompt,
+  mainImage, whiteBg, sceneImages, sellingPoints, videoScripts, adMaterial, brief, projectId, isLight, generationTaskId, qualityReport, onAddToChat, onEditPrompt, libraryAddRequest, onLibraryAddConsumed,
 }: CanvasViewProps) {
   // Canvas state
   const [elements, setElements] = useState<CanvasElement[]>([]);
@@ -992,13 +995,13 @@ export default function CanvasView({
   }, [compareA, compareB]);
 
   // ── Add asset to canvas ──────────────────────────────────────
-  const addToCanvas = (item: AssetItem) => {
+  const addToCanvas = (item: AssetItem, pos?: { x: number; y: number }) => {
     const newEl: CanvasElement = {
       id: `asset_${Date.now()}`,
       type: item.type === 'image' ? 'key_visual' : item.type,
       label: item.label,
-      x: 100 + elements.length * 50,
-      y: 100 + elements.length * 30,
+      x: pos ? Math.round(pos.x) : 100 + elements.length * 50,
+      y: pos ? Math.round(pos.y) : 100 + elements.length * 30,
       width: 280, height: 320,
       thumbnail_url: item.url,
       metadata: { added_from_library: true },
@@ -1007,6 +1010,31 @@ export default function CanvasView({
     setElements(newElements);
     persistCanvas(newElements, connections, viewport);
   };
+
+  // 资料库拖拽落到画布:按落点换算成画布坐标(居中到光标)
+  const handleLibraryDrop = (e: React.DragEvent) => {
+    const raw = e.dataTransfer.getData('application/x-moyag-asset');
+    if (!raw) return;
+    e.preventDefault();
+    try {
+      const item = JSON.parse(raw) as AssetItem;
+      const rect = containerRef.current?.getBoundingClientRect();
+      const pos = rect ? {
+        x: (e.clientX - rect.left - viewport.x) / viewport.scale - 140,
+        y: (e.clientY - rect.top - viewport.y) / viewport.scale - 160,
+      } : undefined;
+      addToCanvas(item, pos);
+    } catch { /* 非本应用拖拽,忽略 */ }
+  };
+
+  // 资料库「+ 加入画布」按钮:父级置 libraryAddRequest -> 加到画布并回调清空
+  useEffect(() => {
+    if (libraryAddRequest) {
+      addToCanvas(libraryAddRequest);
+      onLibraryAddConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryAddRequest]);
 
   const deleteElement = (elId: string) => {
     setElements(prev => prev.filter(el => el.id !== elId));
@@ -1074,6 +1102,8 @@ export default function CanvasView({
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
+          onDragOver={(e) => { if (e.dataTransfer.types.includes('application/x-moyag-asset')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } }}
+          onDrop={handleLibraryDrop}
           style={{ cursor: draggingElId ? 'grabbing' : dragging ? 'grabbing' : 'grab' }}>
 
           <button
