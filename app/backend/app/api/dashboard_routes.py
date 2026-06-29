@@ -230,10 +230,14 @@ def get_overview(db: Session = Depends(get_db)):
     now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    design_projects = db.query(func.count(Project.id)).scalar() or 0
+    # 排除开发期测试种子项目(Demo Visual Agent Project,独占大量测试资产),仅统计真实数据(不删底层,沿用 brand_count 过滤模式)
+    test_pids = [r[0] for r in db.query(Project.id).filter(Project.name.like("Demo Visual Agent%")).all()] or [-1]
+    real_proj = ~Project.name.like("Demo Visual Agent%")
+
+    design_projects = db.query(func.count(Project.id)).filter(real_proj).scalar() or 0
     # "已完成":状态命中 done 集合,或已产出资产(更贴近真实"完成")
-    by_status = db.query(func.count(Project.id)).filter(Project.status.in_(DONE_STATUS)).scalar() or 0
-    by_assets = db.query(func.count(func.distinct(VisualAsset.project_id))).scalar() or 0
+    by_status = db.query(func.count(Project.id)).filter(Project.status.in_(DONE_STATUS), real_proj).scalar() or 0
+    by_assets = db.query(func.count(func.distinct(VisualAsset.project_id))).filter(VisualAsset.project_id.notin_(test_pids)).scalar() or 0
     completed_projects = min(max(by_status, by_assets), design_projects)
     completion_rate = round(completed_projects / max(design_projects, 1) * 100)
 
@@ -243,7 +247,7 @@ def get_overview(db: Session = Depends(get_db)):
     scores = [70 + (v.id * 7) % 25 for v in video_tasks]
     avg_video_score = round(sum(scores) / len(scores)) if scores else 0
 
-    total_assets = db.query(func.count(VisualAsset.id)).scalar() or 0
+    total_assets = db.query(func.count(VisualAsset.id)).filter(VisualAsset.project_id.notin_(test_pids)).scalar() or 0
 
     brand_count = (
         db.query(func.count(func.distinct(BrandProfile.name)))
@@ -260,7 +264,7 @@ def get_overview(db: Session = Depends(get_db)):
         nxt = day + timedelta(days=1)
         cnt = (
             db.query(func.count(VisualAsset.id))
-            .filter(VisualAsset.created_at >= day, VisualAsset.created_at < nxt)
+            .filter(VisualAsset.created_at >= day, VisualAsset.created_at < nxt, VisualAsset.project_id.notin_(test_pids))
             .scalar() or 0
         )
         heatmap.append({"label": CN_WD[day.weekday()], "date": day.day, "count": cnt})
@@ -268,7 +272,7 @@ def get_overview(db: Session = Depends(get_db)):
     # 项目类型分布(ProductBrief.category)
     rows = (
         db.query(ProductBrief.category, func.count(ProductBrief.id))
-        .filter(ProductBrief.category.isnot(None), ProductBrief.category != "")
+        .filter(ProductBrief.category.isnot(None), ProductBrief.category != "", ProductBrief.project_id.notin_(test_pids))
         .group_by(ProductBrief.category)
         .order_by(func.count(ProductBrief.id).desc())
         .limit(6)
@@ -288,7 +292,7 @@ def get_overview(db: Session = Depends(get_db)):
 
     # 最近项目
     recent_projects = []
-    for p in db.query(Project).order_by(Project.created_at.desc()).limit(6).all():
+    for p in db.query(Project).filter(real_proj).order_by(Project.created_at.desc()).limit(6).all():
         brief = db.query(ProductBrief).filter(ProductBrief.project_id == p.id).first()
         assets = db.query(func.count(VisualAsset.id)).filter(VisualAsset.project_id == p.id).scalar() or 0
         recent_projects.append({
