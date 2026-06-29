@@ -212,6 +212,14 @@ export const api = {
       client.get(`/library/product/${id}`).then(r => r.data),
   },
 
+  // Chat (图三: 画布 AI 对话历史持久化, 租户隔离)
+  chat: {
+    getHistory: (projectId: number) =>
+      client.get<{ messages: unknown[] }>('/chat/history', { params: { project_id: projectId } }).then(r => r.data),
+    saveHistory: (projectId: number, messages: unknown[]) =>
+      client.put<{ ok: boolean; count: number }>('/chat/history', { project_id: projectId, messages }).then(r => r.data),
+  },
+
   // Projects
   projects: {
     list: () => client.get<Project[]>('/projects/').then(r => r.data),

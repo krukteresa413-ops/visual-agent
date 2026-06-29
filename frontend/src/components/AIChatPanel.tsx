@@ -125,7 +125,43 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   }, [skillPromptSelected, onSkillPromptConsumed]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const msgIdRef = useRef(1);
+  const historyLoadedRef = useRef(false);
+  const lastSavedRef = useRef<string>('');
   const { data: modelOptions } = useQuery({ queryKey: ['generation', 'models', 'catalog'], queryFn: () => api.generation.catalog() });
+
+  // 图三: 挂载/切项目时按 projectId 回填持久化的对话历史(关面板/刷新/切项目不再丢失)
+  useEffect(() => {
+    if (!projectId) return;
+    historyLoadedRef.current = false;
+    lastSavedRef.current = '';
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.chat.getHistory(projectId);
+        const msgs = (res?.messages || []) as unknown[];
+        if (!cancelled && msgs.length) {
+          dispatch({ type: 'hydrate', messages: msgs as never });
+          lastSavedRef.current = JSON.stringify(msgs);
+        }
+      } catch {
+        /* 历史加载失败不阻断面板 */
+      } finally {
+        if (!cancelled) historyLoadedRef.current = true;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  // 图三: 一轮对话结束(完成/出错)时, 保存整段会话快照(租户+项目维度)
+  useEffect(() => {
+    if (!projectId || !historyLoadedRef.current) return;
+    if (chatState.phase !== 'completed' && chatState.phase !== 'error') return;
+    if (chatState.messages.length === 0) return;
+    const snapshot = JSON.stringify(chatState.messages);
+    if (snapshot === lastSavedRef.current) return;
+    lastSavedRef.current = snapshot;
+    api.chat.saveHistory(projectId, chatState.messages).catch(() => { /* 保存失败不阻断对话 */ });
+  }, [chatState.phase, chatState.messages, projectId]);
 
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -23,6 +23,7 @@ export type ChatAction =
   | { type: 'submit'; prompt: string }
   | { type: 'assistantStatus'; step: string; content: string; status: ChatPhase | 'user'; percent: number; assets?: ChatAssetEvent[] }
   | { type: 'sse'; event: ChatLifecycleEvent }
+  | { type: 'hydrate'; messages: ChatMessage[] }
   | { type: 'reset' };
 
 export const initialChatState: ChatState = {
@@ -46,6 +47,11 @@ function toChatPhase(phase: string): ChatPhase {
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   if (action.type === 'reset') return initialChatState;
+
+  // 图三: 挂载时用持久化的历史回填会话(不进入任何进行中态, 仅展示)。
+  if (action.type === 'hydrate') {
+    return { phase: 'idle', percent: 0, error: null, messages: action.messages };
+  }
 
   if (action.type === 'submit') {
     return {

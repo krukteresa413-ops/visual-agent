@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatReducer, initialChatState } from './chatReducer';
+import { chatReducer, initialChatState, type ChatMessage } from './chatReducer';
 import { sseToChatEventAdapter } from './sseToChatEventAdapter';
 import { doneEvent, errorEvent, heartbeatEvent, progressEvent } from './sseFixtures';
 
@@ -73,5 +73,17 @@ describe('chatReducer', () => {
   it('supports reset', () => {
     const dirty = chatReducer(initialChatState, { type: 'submit', prompt: 'x' });
     expect(chatReducer(dirty, { type: 'reset' })).toEqual(initialChatState);
+  });
+
+  it('hydrates persisted history into messages without entering an in-progress phase (图三)', () => {
+    const persisted: ChatMessage[] = [
+      { id: '1', role: 'user', step: '用户指令', content: '生成一台冰箱', status: 'user', percent: 0, assets: [] },
+      { id: '2', role: 'assistant', step: '完成', content: '生成完成', status: 'completed', percent: 100, assets: [{ type: 'image', url: '/uploads/x.png' }] },
+    ];
+    const state = chatReducer(initialChatState, { type: 'hydrate', messages: persisted });
+    expect(state.phase).toBe('idle');
+    expect(state.messages).toHaveLength(2);
+    expect(state.messages[0].role).toBe('user');
+    expect(state.messages.at(-1)?.assets).toEqual([{ type: 'image', url: '/uploads/x.png' }]);
   });
 });

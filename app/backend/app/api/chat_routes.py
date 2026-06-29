@@ -12,13 +12,18 @@ sseToChatEventAdapter 契约（MoyagProgressEvent）：
 """
 import json
 import logging
-from typing import Optional
+from typing import Any, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.agents.conversation.agent import run_turn
+from app.db.session import get_db
+from app.models.auth import User
+from app.models.chat_conversation import ChatConversation
+from app.services.auth_service import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +34,11 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     reference_image_url: Optional[str] = None
     project_id: Optional[int] = None
+
+
+class SaveHistoryRequest(BaseModel):
+    project_id: int
+    messages: List[Any] = Field(default_factory=list)
 
 
 def _sse(payload: dict) -> str:
@@ -83,3 +93,55 @@ async def chat(req: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# ── 图三: 对话历史持久化(租户隔离) ──────────────────────────────────────
+# 画布 AI 对话原本只在内存(chatState), 关面板/刷新即丢。这里按 (tenant, project)
+# 存整段会话快照, 挂载回填、整轮完成时保存。租户隔离: 一律按 current_user.tenant_id 过滤。
+
+@router.get("/history")
+def get_chat_history(
+    project_id: int = Query(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    conv = (
+        db.query(ChatConversation)
+        .filter(
+            ChatConversation.project_id == project_id,
+            ChatConversation.tenant_id == current_user.tenant_id,
+        )
+        .first()
+    )
+    if not conv:
+        return {"messages": []}
+    try:
+        return {"messages": json.loads(conv.messages or "[]")}
+    except (ValueError, TypeError):
+        return {"messages": []}
+
+
+@router.put("/history")
+def save_chat_history(
+    req: SaveHistoryRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    payload = json.dumps(req.messages, ensure_ascii=False)
+    conv = (
+        db.query(ChatConversation)
+        .filter(
+            ChatConversation.project_id == req.project_id,
+            ChatConversation.tenant_id == current_user.tenant_id,
+        )
+        .first()
+    )
+    if conv:
+        conv.messages = payload
+    else:
+        conv = ChatConversation(
+            tenant_id=current_user.tenant_id, project_id=req.project_id, messages=payload
+        )
+        db.add(conv)
+    db.commit()
+    return {"ok": True, "count": len(req.messages)}
