@@ -14,9 +14,6 @@ const NAV = [
   { to: '/brands', label: '品牌库' },
   { to: '/prompts', label: '创意脚本库' },
   { to: '/inspiration', label: '灵感源' },
-  { to: '/dashboard', label: '数据看板' },
-  { to: '/copywriting', label: 'AI 文案助手' },
-  { to: '/video-edit', label: '视频剪辑' },
   { to: '/profile', label: '个人中心' },
 ];
 

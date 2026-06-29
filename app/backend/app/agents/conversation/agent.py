@@ -12,7 +12,10 @@ from app.agents.conversation.tools import TOOL_SPECS, execute_tool
 SYSTEM_PROMPT = (
     "你是电商视觉创作助手。用户用自然语言提需求时，"
     "判断是直接用文字回答，还是调用工具生成/修改图片。"
-    "需要出图或改图时调用 generate_image。回答简洁、用中文。"
+    "需要出图或改图时调用 generate_image。"
+    "若用户提供了参考图，必须在该图基础上修改（以图生图），"
+    "把参考图 URL 作为 reference_image_url 传入，不要凭空重画。"
+    "回答简洁、用中文。"
 )
 
 MAX_STEPS = 4
@@ -56,6 +59,13 @@ async def run_turn(user_message: str, reference_image_url: Optional[str] = None)
 
         for tc in tool_calls:
             args = json.loads(tc.function.arguments or "{}")
+            # 务必以图生图:有参考图但大脑漏传时强制补上,不依赖 LLM 自觉
+            if (
+                tc.function.name == "generate_image"
+                and reference_image_url
+                and not args.get("reference_image_url")
+            ):
+                args["reference_image_url"] = reference_image_url
             result = await execute_tool(tc.function.name, args)
             trace.append({"tool": tc.function.name, "args": args, "result": result})
             if isinstance(result, dict) and result.get("image_urls"):

@@ -200,6 +200,11 @@ export const api = {
       client.post<{ success: boolean; fields: Record<string, unknown>; error?: string }>(
         '/vision/brief-suggest', { image_url: imageUrl },
       ).then(r => r.data),
+    // 图一(需求一): 从一句话文字需求抽取问卷字段 -> 自动判断是否还要追问
+    briefSuggestText: (text: string) =>
+      client.post<{ success: boolean; fields?: Record<string, unknown>; error?: string }>(
+        '/vision/brief-suggest-text', { text },
+      ).then(r => r.data),
   },
 
   // Library

@@ -6,6 +6,7 @@ import {
   answerDisplay,
   buildBriefFromAnswers,
   suggestSellingPoints,
+  isBriefSufficient,
 } from './templateQuestions';
 
 describe('templateQuestions', () => {
@@ -72,6 +73,24 @@ describe('templateQuestions', () => {
       const { brief } = buildBriefFromAnswers({ brand_name: '', usage_scenarios: [] }, 'seed');
       expect(brief.brand_name).toBeUndefined();
       expect(brief.usage_scenarios).toBeUndefined();
+    });
+  });
+
+  describe('isBriefSufficient (需求一 自动判断是否追问)', () => {
+    it('够详细:产品名 + ≥2 关键属性 -> 直接出图', () => {
+      expect(isBriefSufficient({ product_name: '防晒衣', category: '服饰鞋包', selling_points: ['UPF50+'] })).toBe(true);
+    });
+    it('只有产品名 -> 不够,需追问', () => {
+      expect(isBriefSufficient({ product_name: '防晒衣' })).toBe(false);
+    });
+    it('产品名 + 仅1项属性 -> 不够', () => {
+      expect(isBriefSufficient({ product_name: '防晒衣', category: '服饰鞋包' })).toBe(false);
+    });
+    it('无产品名 -> 永远不够', () => {
+      expect(isBriefSufficient({ category: '服饰鞋包', selling_points: ['x'], brand_style: '简约' })).toBe(false);
+    });
+    it('空数组/空串不计入关键属性', () => {
+      expect(isBriefSufficient({ product_name: 'X', selling_points: [], brand_style: '' })).toBe(false);
     });
   });
 

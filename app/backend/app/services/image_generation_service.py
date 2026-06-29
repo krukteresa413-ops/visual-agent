@@ -5,6 +5,7 @@ import base64
 import uuid
 import hashlib
 import os
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -25,6 +26,42 @@ from app.models.image_generation_model import (
 # ---------------------------------------------------------------------------
 
 UPLOAD_DIR = "/opt/visual-agent/uploads/generated"
+
+logger = logging.getLogger(__name__)
+
+
+def _request_with_model(request: ImageGenerationRequest, model: str) -> ImageGenerationRequest:
+    """复制请求并替换 model(兼容 pydantic v1/v2)。"""
+    if hasattr(request, "model_copy"):
+        return request.model_copy(update={"model": model})
+    return request.copy(update={"model": model})
+
+
+_UPLOAD_ROOT = "/opt/visual-agent/uploads"
+
+
+def _coerce_image_ref(url: str) -> str:
+    """把图片引用规整成 DataEyes 能取的形式。
+
+    DataEyes(NanoBanana)只认完整 http(s) URL 或 base64 data URL,不认服务器本地
+    相对路径(/uploads/...)——直接传会被当成 base64 解码而 500。本地图读盘转 data URL;
+    http/data 原样透传。带 uploads 目录越权保护,读不到则原样返回(让上游错误可见)。
+    """
+    if not url or url.startswith(("http://", "https://", "data:")):
+        return url
+    try:
+        rel = url.lstrip("/")
+        full = os.path.realpath(os.path.join("/opt/visual-agent", rel))
+        root = os.path.realpath(_UPLOAD_ROOT)
+        if full != root and not full.startswith(root + os.sep):
+            return url  # 越界,不读
+        with open(full, "rb") as fh:
+            raw = fh.read()
+        ext = os.path.splitext(full)[1].lower().lstrip(".")
+        mime = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp", "gif": "gif"}.get(ext, "png")
+        return f"data:image/{mime};base64,{base64.b64encode(raw).decode()}"
+    except Exception:
+        return url
 
 # 图三: DataEyes 自动出图默认模型。历史默认是 gemini-2.5-flash-image(NanoBanana),
 # 用户要求图片优先使用 gpt-image-2。集中一处定义, 可用 env 覆盖。
@@ -589,7 +626,10 @@ class DataEyesAIImageProvider(ImageGenerationProvider):
         source_image_urls = image_urls or request.options.get("image_urls") or []
         if source_image_urls:
             content = [{"type": "text", "text": request.prompt}]
-            content.extend({"type": "image_url", "image_url": {"url": url}} for url in source_image_urls)
+            content.extend(
+                {"type": "image_url", "image_url": {"url": _coerce_image_ref(url)}}
+                for url in source_image_urls
+            )
         else:
             content = request.prompt
 
@@ -650,6 +690,40 @@ class DataEyesAIImageProvider(ImageGenerationProvider):
         # ── Format dispatch (Fix 2B) ──
         model_meta = self.MODEL_REGISTRY.get(model, {})
         fmt = model_meta.get("format", "openai")
+
+        # ── 以图生图路由(需求二) ──
+        # reference_image_url / options.image_urls 是源图。gpt-image-2 走的
+        # /images/generations 不接收图片输入,只有 gemini/NanoBanana(chat/completions)
+        # 能真正读取源图做编辑。因此凡带源图的请求,一律路由到吃图模型并把图喂进去;
+        # 调用方指定的模型若本身不吃图,自动换成 gemini(env 可覆盖),并带 gemini 兜底回退,
+        # 确保"务必以图生图"不静默退化成文生图。
+        source_image_urls: list[str] = []
+        if request.reference_image_url:
+            source_image_urls.append(request.reference_image_url)
+        for u in (request.options.get("image_urls") or []):
+            if u and u not in source_image_urls:
+                source_image_urls.append(u)
+
+        if source_image_urls:
+            i2i_models: list[str] = []
+            if fmt == "nanobanana_openai":
+                i2i_models.append(model)  # 调用方已选了能吃图的模型
+            i2i_models.append(os.getenv("DATAEYES_IMG2IMG_MODEL", "gemini-3-pro-image-preview"))
+            i2i_models.append("gemini-2.5-flash-image")  # 兜底吃图模型
+            seen: set[str] = set()
+            i2i_models = [m for m in i2i_models if m and not (m in seen or seen.add(m))]
+            last_exc: Exception | None = None
+            for m in i2i_models:
+                try:
+                    return await self._generate_nanobanana_openai(
+                        _request_with_model(request, m), client, image_urls=source_image_urls
+                    )
+                except Exception as exc:  # noqa: BLE001 — 换下一个吃图模型重试
+                    last_exc = exc
+                    logger.warning("img2img model %s failed: %s", m, exc)
+                    continue
+            assert last_exc is not None
+            raise last_exc
 
         if fmt == "nanobanana_openai":
             return await self._generate_nanobanana_openai(request, client)

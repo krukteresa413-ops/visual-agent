@@ -130,3 +130,14 @@ export function buildBriefFromAnswers(
 
   return { brief, prompt: parts.join(',') + '。' };
 }
+
+// 需求一:关键属性字段(产品名之外,用于判断 brief 是否够详细)
+const KEY_ATTR_FIELDS = ['category', 'target_audience', 'selling_points', 'brand_style', 'usage_scenarios'];
+
+/** 文字 brief 是否已足够详细 —— 够则可直接出图、不必触发 12 问追问(需求一)。
+ *  规则:有产品名 + 至少 2 项关键属性(品类/受众/卖点/风格/场景)。 */
+export function isBriefSufficient(answers: Record<string, AnswerValue>): boolean {
+  if (isBlank(answers.product_name)) return false;
+  const have = KEY_ATTR_FIELDS.filter((k) => !isBlank(answers[k])).length;
+  return have >= 2;
+}

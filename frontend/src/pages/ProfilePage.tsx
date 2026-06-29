@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { AuthUser, GenerationProvider, RechargeTier } from '../api/client';
 
@@ -80,6 +81,21 @@ export default function ProfilePage() {
           </div>
           <button className="shrink-0 rounded-lg border border-white/[0.14] bg-white/[0.05] px-3 py-2 text-xs text-gray-200 transition-colors hover:text-white">升级方案</button>
         </section>
+
+        {/* 数据看板入口(从顶部导航移入个人中心) */}
+        <Link
+          to="/dashboard"
+          className="flex items-center justify-between rounded-2xl border border-white/[0.1] bg-white/[0.04] p-5 transition-colors hover:border-orange-400/40 hover:bg-orange-500/[0.06]"
+        >
+          <span className="flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-xl bg-orange-500/15 text-xl">📊</span>
+            <span>
+              <span className="block font-semibold text-white">数据看板</span>
+              <span className="block text-xs text-gray-400">项目统计与爆款趋势</span>
+            </span>
+          </span>
+          <span className="text-gray-400">→</span>
+        </Link>
 
         {/* 套餐对比 */}
         <div className="grid gap-3 sm:grid-cols-3">

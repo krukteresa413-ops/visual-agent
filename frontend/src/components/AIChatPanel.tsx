@@ -28,6 +28,7 @@ import {
   isBlank,
   buildBriefFromAnswers,
   suggestSellingPoints,
+  isBriefSufficient,
   type AnswerValue,
 } from '../lib/questionnaire/templateQuestions';
 
@@ -354,7 +355,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     return i;
   };
 
-  const startQuestionnaire = async (seed: string) => {
+  const startQuestionnaire = async (seed: string, prefill: Record<string, AnswerValue> = {}) => {
     // 图二:作答用的源图(本地上传 > 画布关联图),既用于识别预填,也作为最终生成的参考图
     const imgUrl = (uploadedFile?.type === 'image' ? uploadedFile.url : undefined) || chatAssetContext?.image_url || null;
     setQaSeed(seed);
@@ -362,15 +363,17 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     setQaActive(true);
     setInput('');
     setQaSourceImage(imgUrl);
-    setQaAnswers({});
-    setQaIndex(0);
+    // 需求一:文字预填先打底(只问识别不到的缺口)
+    const base: Record<string, AnswerValue> = { ...prefill };
+    setQaAnswers(base);
+    setQaIndex(firstUnansweredFrom(base, 0));
     if (!imgUrl) return;
-    // 识别图片内容,预填基础字段,跳到第一个未填项
+    // 识别图片内容,与文字预填合并,跳到第一个未填项
     setQaRecognizing(true);
     try {
       const res = await api.vision.briefSuggest(imgUrl);
       if (res?.success && res.fields) {
-        const filled: Record<string, AnswerValue> = {};
+        const filled: Record<string, AnswerValue> = { ...base };
         for (const q of TEMPLATE_QUESTIONS) {
           const raw = res.fields[q.key] as AnswerValue | undefined;
           if (raw === undefined) continue;
@@ -383,7 +386,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
         else setQaIndex(idx);
       }
     } catch {
-      // 识别失败 -> 退回纯手动问卷
+      // 识别失败 -> 退回纯手动问卷(已含文字预填)
     } finally {
       setQaRecognizing(false);
     }
@@ -423,13 +426,49 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   const toggleMulti = (opt: string) =>
     setQaMulti((prev) => (prev.includes(opt) ? prev.filter((x) => x !== opt) : [...prev, opt]));
 
+  // 需求一:对话首次创作的自动分流
+  //  - 有参考图(上传/画布) -> 跳过 12 问,直接以图生图(用户明确要求)
+  //  - 纯文字 -> 解析 brief,够详细则直接出图,不够才追问(且只问识别不到的缺口)
+  const routeFirstAgentTurn = async (seed: string) => {
+    const imgUrl = (uploadedFile?.type === 'image' ? uploadedFile.url : undefined) || chatAssetContext?.image_url || null;
+    if (imgUrl) {
+      setQaDone(true);
+      void runGeneration(seed, undefined, 'image-gen', imgUrl);
+      return;
+    }
+    // 纯文字:抽取 brief 字段
+    const fields: Record<string, AnswerValue> = {};
+    try {
+      const res = await api.vision.briefSuggestText(seed);
+      if (res?.success && res.fields) {
+        for (const q of TEMPLATE_QUESTIONS) {
+          const raw = res.fields[q.key] as AnswerValue | undefined;
+          if (raw === undefined) continue;
+          const v = normalizeAnswer(q, raw);
+          if (!isBlank(v)) fields[q.key] = v;
+        }
+      }
+    } catch {
+      // 抽取失败 -> 退回问卷
+    }
+    if (isBriefSufficient(fields)) {
+      // 够详细 -> 不追问,直接出图(product_name 由 buildBriefFromAnswers 用原文兜底)
+      setQaDone(true);
+      const { brief, prompt } = buildBriefFromAnswers(fields, seed);
+      void runGeneration(prompt, brief, 'image-gen');
+      return;
+    }
+    // 不够 -> 进问卷,预填已识别字段,只问缺口
+    void startQuestionnaire(seed, fields);
+  };
+
   const handleSubmit = async () => {
     if (isStreaming) return;
     const prompt = input.trim();
     if (qaActive) { if (!qaRecognizing) recordAnswer(prompt); return; }
     if (!prompt) return;
-    // Agent 模式首次创作 -> 进入模板追问;已问过本会话或图生图/视频模式 -> 原行为
-    if (agentMode === 'agent' && !qaDone) { void startQuestionnaire(prompt); return; }
+    // Agent 模式首次创作 -> 自动判断(有图直接以图生图;纯文字按详略决定是否追问)
+    if (agentMode === 'agent' && !qaDone) { void routeFirstAgentTurn(prompt); return; }
     runGeneration(prompt);
   };
 

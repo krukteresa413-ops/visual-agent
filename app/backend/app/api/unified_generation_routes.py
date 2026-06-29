@@ -380,6 +380,10 @@ async def _quick_generate_image_asset(req, brief: dict) -> dict:
     brand_context = (brief or {}).get("_brand_context")
     if brand_context:
         prompt = f"{prompt}\n{brand_context}"
+    # 以图生图(需求二):有源图时保留主体、按用户指令做定制化修改,并把源图喂给吃图模型
+    reference_image_url = getattr(req, "reference_image_url", None)
+    if reference_image_url:
+        prompt = f"在保留参考图中产品主体的前提下,按以下要求对其进行定制化修改:{prompt}"
     # 自动路由 + 失败回退:依次尝试 provider 链,任一成功即返回;最终回退 local 占位,保证不卡死/不 502
     chain: list[str] = []
     if req.image_provider:
@@ -387,6 +391,9 @@ async def _quick_generate_image_asset(req, brief: dict) -> dict:
     for p in ("dataeyes", "mige", "pollinations", "local"):
         if p not in chain:
             chain.append(p)
+    if reference_image_url:
+        # 以图生图只有 dataeyes(gemini)能真正吃图;不静默回退到会丢图的文生图 provider
+        chain = ["dataeyes"]
 
     image_result = None
     image = None
@@ -399,6 +406,7 @@ async def _quick_generate_image_asset(req, brief: dict) -> dict:
                 prompt=prompt,
                 width=1024,
                 height=1024,
+                reference_image_url=reference_image_url,
             ))
             image = image_result.images[0] if (image_result and image_result.images) else None
             if image is not None and image.url:
@@ -1084,7 +1092,6 @@ async def quick_generate(req: QuickGenerateRequest):
             progress = gt.create(task_id, total_steps=8)
 
             await progress.step("分析需求", "thinking", f"分析「{req.prompt[:30]}...」的视觉需求")
-            await progress.step("策略规划", "thinking", "确定视觉方向和风格")
 
             async def on_progress(step_label, step_status="generating", msg=""):
                 await progress.step(step_label, step_status, msg)
