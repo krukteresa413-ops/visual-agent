@@ -20,6 +20,7 @@ import ModelPreferencePanel from './model/ModelPreferencePanel';
 import SkillsPopup from './SkillsPopup';
 import MessageRenderer from './MessageRenderer';
 import QuestionnairePanel from './QuestionnairePanel';
+import SkillsEmptyState from './SkillsEmptyState';
 import { chatReducer, initialChatState } from '../lib/sse/chatReducer';
 import { sseToChatEventAdapter } from '../lib/sse/sseToChatEventAdapter';
 import {
@@ -500,6 +501,23 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     void startQuestionnaire(seed, fields);
   };
 
+  const handleSkillSelect = (p: string, cat: string) => {
+    setShowSkills(false);
+    const m: AgentMode = cat === '视频' ? 'video-gen' : 'image-gen';
+    const pid = projectId ?? 2;
+    const pickUrl = (it: any): string | undefined => it?.url || it?.image_url || it?.preview_url || it?.thumbnail_url || it?.asset_ref?.url;
+    Promise.allSettled([api.atelierCanvas.getAssets(pid), api.atelierCanvas.getState(pid)])
+      .then((results) => {
+        const urls: string[] = [];
+        if (results[0].status === 'fulfilled') { const resp: any = results[0].value; const items = Array.isArray(resp) ? resp : (resp?.assets || resp?.elements || resp?.images || []); for (const it of items as any[]) { const u = pickUrl(it); if (u) urls.push(u); } }
+        if (results[1].status === 'fulfilled') { const state: any = results[1].value; for (const el of (state?.elements || []) as any[]) { const u = pickUrl(el); if (u) urls.push(u); } }
+        if (uploadedFile?.type === 'image' && uploadedFile.url) urls.unshift(uploadedFile.url);
+        const valid = urls.filter((u): u is string => typeof u === 'string' && (u.startsWith('http') || u.startsWith('/')));
+        setSkillImages(Array.from(new Set(valid)));
+        setSkillPicker({ prompt: p, mode: m });
+      });
+  };
+
   const handleSubmit = async () => {
     if (isStreaming) return;
     const prompt = input.trim();
@@ -813,7 +831,9 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
               <MessageRenderer key={msg.id} message={msg} isLight={isLight} />
             ))}
           </>
-        ) : null}
+        ) : ((!qaActive && !qaRecognizing) ? (
+          <SkillsEmptyState isLight={isLight} onPick={handleSkillSelect} onShowAll={() => setShowSkills(true)} />
+        ) : null)}
 
         {qaActive && qaRecognizing && (
           <div className={`rounded-2xl border p-4 text-sm ${isLight ? 'border-gray-200 bg-white text-gray-700' : 'border-white/10 bg-white/[0.03] text-gray-200'}`}>
