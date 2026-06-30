@@ -292,6 +292,36 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
   const reEdit = useCallback(async (nodeId: string, instruction: string) => {
     const node = getNodes().find((n) => n.id === nodeId);
     if (!node || !instruction.trim()) return;
+    // 图二:视频的二次编辑 = 按新指令走异步视频管线重出一段,并轮询画布把新视频并入
+    if (String((node.data as { type?: string })?.type) === 'video') {
+      setReeditBusy(true);
+      setActionProgress('processing');
+      setCanvasNotice({ kind: 'info', text: '正在按新指令重新生成视频(约 1-2 分钟),完成后自动加入画布…' });
+      try {
+        const before = new Set(getNodes().map((n) => String((n.data as { legacy_id?: string })?.legacy_id || n.id)));
+        await api.generation.quickGenerate({ prompt: instruction.trim(), project_id: projectId, agent_mode: 'video-gen' });
+        let landed = false;
+        for (let i = 0; i < 20; i += 1) {
+          await new Promise((r) => window.setTimeout(r, 6000));
+          const data = await api.atelierCanvas.getState(projectId);
+          const fresh = (data?.elements || []).filter((el: { id: string }) => !before.has(String(el.id)));
+          if (fresh.length) {
+            setNodes((current) => { let next = current; for (const el of fresh) next = upsertFlowCanvasNode(next, el) as typeof current; return next; });
+            setActionProgress('complete');
+            setCanvasNotice({ kind: 'info', text: '新视频已生成并加入画布' });
+            landed = true;
+            break;
+          }
+        }
+        if (!landed) setCanvasNotice({ kind: 'warn', text: '视频仍在渲染,稍后会自动出现;也可手动刷新查看' });
+      } catch {
+        setActionProgress('error');
+        setCanvasNotice({ kind: 'warn', text: '视频生成失败,请稍后重试' });
+      } finally {
+        setReeditBusy(false);
+      }
+      return;
+    }
     const selection = buildSelectionContext([node] as typeof nodes);
     setActionProgress('processing');
     setReeditBusy(true);
@@ -328,7 +358,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     } finally {
       setReeditBusy(false);
     }
-  }, [getNodes, projectId, applyCanvasActionResult]);
+  }, [getNodes, projectId, applyCanvasActionResult, setNodes]);
 
   // 图二:✎ 编辑 -> 打开画布内弹窗(替代原生 window.prompt)
   useEffect(() => {
@@ -517,7 +547,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
             </div>
           </div>
           )}
-          {selectedActionAnchor && <ImageActionBar left={selectedActionAnchor.left} top={selectedActionAnchor.top} onAction={handleImageAction} busy={imgActionBusy} />}
+          {selectedActionAnchor && <ImageActionBar left={selectedActionAnchor.left} top={selectedActionAnchor.top} onAction={handleImageAction} busy={imgActionBusy} elementType={String((selectedActionNode?.data as { type?: string })?.type || '')} />}
           <ReactFlow
             nodes={nodes}
             edges={edges}

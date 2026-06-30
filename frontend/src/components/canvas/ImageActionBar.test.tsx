@@ -6,11 +6,17 @@ const barSource = fs.readFileSync(path.resolve(__dirname, 'ImageActionBar.tsx'),
 const flowSource = fs.readFileSync(path.resolve(__dirname, '../CanvasFlow.tsx'), 'utf8');
 
 describe('ImageActionBar React Flow contract', () => {
-  it('renders ten action buttons with inert unavailable actions disabled', () => {
+  it('renders the five-action bar with busy-based disabling', () => {
     expect(barSource).toContain('data-lovart-image-action-bar');
-    expect((barSource.match(/id: '/g) || []).length).toBe(10);
+    expect((barSource.match(/id: '/g) || []).length).toBe(5);
     expect(barSource).toContain('data-image-action={action.id}');
-    expect(barSource).toContain('disabled={!action.enabled}');
+    expect(barSource).toContain('busy === action.id');
+  });
+
+  it('hides 抠图 (cutout) for video elements via elementType', () => {
+    expect(barSource).toContain('elementType');
+    expect(barSource).toMatch(/elementType === 'video'/);
+    expect(barSource).toContain("a.id !== 'cutout'");
   });
 
   it('is wired from CanvasFlow selected React Flow nodes and viewport', () => {

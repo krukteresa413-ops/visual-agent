@@ -22,7 +22,7 @@ function AssetNode({ id, data, selected }: NodeProps) {
       <div className="flex h-8 items-center justify-between border-b border-gray-100 px-3">
         <div className="min-w-0 truncate text-[11px] font-medium text-gray-800">{label}</div>
         <div className="ml-2 flex shrink-0 items-center gap-1">
-          {(node.type === 'asset' || node.type === 'image' || !node.type) && (
+          {(node.type === 'asset' || node.type === 'image' || node.type === 'video' || !node.type) && (
             <button
               type="button"
               title="二次编辑"
