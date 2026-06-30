@@ -888,7 +888,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                   onSelectSkill={(p, cat) => {
                     setShowSkills(false);
                     // 所有技能都先让用户挑画布源图(抠图/换色/详情页/图生视频 等均基于已有图);也可不选直接生成
-                    const m: AgentMode = cat === 'Video' ? 'video-gen' : 'image-gen';
+                    const m: AgentMode = cat === '视频' ? 'video-gen' : 'image-gen';
                     const pid = projectId ?? 2;
                     const pickUrl = (it: any): string | undefined =>
                       it?.url || it?.image_url || it?.preview_url || it?.thumbnail_url || it?.asset_ref?.url;

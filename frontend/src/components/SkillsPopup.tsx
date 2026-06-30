@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
 
+// 分类图标:汉化后按中文分类名映射(近似 docx 截图观感)
+const CATEGORY_ICONS: Record<string, string> = {
+  '视频': '🎬', '社交媒体': '📱', '电商': '🛒', '品牌': '🎨', '营销': '📣', '工作室': '🖼️',
+};
+
 interface Props {
   isLight: boolean;
   onClose: () => void;
@@ -18,7 +23,7 @@ type Skill = {
 };
 
 export default function SkillsPopup({ isLight, onClose, onSelectSkill, anchorEl }: Props) {
-  const [activeCategory, setActiveCategory] = useState('Video');
+  const [activeCategory, setActiveCategory] = useState('视频');
   const [skills, setSkills] = useState<Skill[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +64,7 @@ export default function SkillsPopup({ isLight, onClose, onSelectSkill, anchorEl 
   }, [anchorEl, onClose]);
 
   const filtered = skills.filter((s) => s.category === activeCategory);
-  const displayCategories = categories.length > 0 ? categories : ['Video', 'Social Media', 'E-Commerce', 'Branding'];
+  const displayCategories = categories.length > 0 ? categories : ['视频', '社交媒体', '电商', '品牌', '营销', '工作室'];
 
   const bg = isLight ? 'bg-white' : 'bg-gray-900';
   const placementClass = anchorEl ? 'fixed z-[100] w-[280px]' : 'relative z-30 w-full';
@@ -86,7 +91,7 @@ export default function SkillsPopup({ isLight, onClose, onSelectSkill, anchorEl 
                   : isLight ? 'bg-white text-gray-500 border-gray-200 hover:border-gray-400' : 'bg-gray-900/50 text-gray-400 border-white/10 hover:border-white/30'
               }`}
             >
-              {cat}
+              <span className="mr-0.5">{CATEGORY_ICONS[cat] || ''}</span>{cat}
             </button>
           ))}
         </div>
@@ -108,7 +113,7 @@ export default function SkillsPopup({ isLight, onClose, onSelectSkill, anchorEl 
             className={`flex items-center gap-2.5 w-full py-2 px-2 rounded-lg transition-colors text-left hover:bg-black/5`}
           >
             <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${isLight ? 'bg-gray-100' : 'bg-white/5'}`}>
-              <span className="text-sm">⚡</span>
+              <span className="text-sm">{CATEGORY_ICONS[skill.category] || '⚡'}</span>
             </div>
             <div className="min-w-0">
               <div className={`text-[11px] font-medium truncate ${textColor}`}>{skill.title}</div>
