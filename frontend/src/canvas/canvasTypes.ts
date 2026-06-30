@@ -12,6 +12,8 @@ export interface LegacyCanvasElement {
   zIndex?: number;
   hidden?: boolean;
   locked?: boolean;
+  // 容器归属:子元素挂到画板(frame)上。x/y 此时是「相对父」坐标(= 绝对坐标当无父时)。
+  parentId?: string;
   editableLayers?: Array<Record<string, unknown>>;
   thumbnail_url?: string;
   asset_ref?: Record<string, unknown>;

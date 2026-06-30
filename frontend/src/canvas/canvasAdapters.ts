@@ -1,4 +1,5 @@
 import type { FlowCanvasState, LegacyCanvasConnection, LegacyCanvasElement, LegacyCanvasState } from './canvasTypes';
+import { orderByParent } from './frameNesting';
 
 // 工具栏小工具用专属 React Flow 节点类型渲染;其余素材沿用 AssetNode(canvasElement)。
 // 元素的逻辑类型(element.type)存在 data.type 里,据此选渲染组件,保证回流时不被打回 canvasElement。
@@ -17,7 +18,8 @@ export function legacyToFlowCanvas(state: LegacyCanvasState): FlowCanvasState {
   const seenIds = new Map<string, number>();
 
   return {
-    nodes: state.elements.map(element => {
+    // 父在子前排序:React Flow 要求父节点在数组中排在子节点之前。
+    nodes: orderByParent(state.elements).map(element => {
       const seen = seenIds.get(element.id) || 0;
       seenIds.set(element.id, seen + 1);
       const runtimeId = seen === 0 ? element.id : `${element.id}__rf_${seen}`;
@@ -31,6 +33,7 @@ export function legacyToFlowCanvas(state: LegacyCanvasState): FlowCanvasState {
         hidden: element.hidden,
         draggable: !element.locked,
         selectable: !element.locked,
+        ...(element.parentId ? { parentId: element.parentId } : {}),
         data: {
           ...withoutGeometry(element),
           legacy_id: element.id,
@@ -66,6 +69,7 @@ export function flowToLegacyCanvas(state: FlowCanvasState): LegacyCanvasState {
         y: node.position.y,
         width: node.data.width,
         height: node.data.height,
+        ...(node.parentId ? { parentId: node.parentId } : {}),
       };
     }),
     connections: state.edges.map(edge => {
@@ -88,7 +92,10 @@ export function flowToLegacyCanvas(state: FlowCanvasState): LegacyCanvasState {
 
 function withoutGeometry(element: LegacyCanvasElement) {
   const { x: _x, y: _y, width: _width, height: _height, ...data } = element;
-  return data;
+  // parentId 是 React Flow 节点的顶层属性,单独承载;从 data 剔除以免 un-parent 后残留旧值。
+  const clean: typeof data = { ...data };
+  delete clean.parentId;
+  return clean;
 }
 
 function withoutEndpoints(connection: LegacyCanvasConnection) {

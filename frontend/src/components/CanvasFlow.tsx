@@ -17,6 +17,7 @@ import {
 } from '@xyflow/react';
 import { api } from '../api/client';
 import { legacyToFlowCanvas, upsertFlowCanvasNode } from '../canvas/canvasAdapters';
+import { absolutePosition, orderByParent, resolveContainment } from '../canvas/frameNesting';
 import { useCanvasPersistence } from '../canvas/useCanvasPersistence';
 import { buildSelectionContext, type SelectionContextItem } from '../canvas/selectionContext';
 import type { FlowCanvasState, LegacyCanvasState } from '../canvas/canvasTypes';
@@ -200,9 +201,30 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   }, [getNodes, getViewport, makeEditableRelationEdges, saveCanvas, setEdges]);
 
 
-  const noteDragStop = useCallback(() => {
-void saveCanvas({ nodes: getNodes() as typeof nodes, edges, viewport: getViewport() });
-  }, [edges, getNodes, getViewport, nodes, saveCanvas]);
+  // 拖拽落定:拖进画板自动归属(绝对→相对父)、拖出自动脱离(相对→绝对),再按「父在子前」
+  // 重排(React Flow 约束),最后整图保存。画板本身不被归属(resolveContainment 内已挡)。
+  const noteDragStop = useCallback((_e: MouseEvent | TouchEvent, node: Node) => {
+    const all = getNodes();
+    const boxes = all.map((n) => ({
+      id: n.id,
+      type: String(n.type ?? ''),
+      parentId: n.parentId,
+      position: n.position,
+      width: Number((n.data as { width?: number })?.width ?? n.width ?? 0),
+      height: Number((n.data as { height?: number })?.height ?? n.height ?? 0),
+    }));
+    const change = node ? resolveContainment(node.id, boxes) : null;
+    if (change) {
+      const updated = all.map((n) => (n.id === node.id
+        ? { ...n, parentId: change.parentId ?? undefined, position: change.position }
+        : n));
+      const ordered = orderByParent(updated) as typeof nodes;
+      setNodes(ordered);
+      void saveCanvas({ nodes: ordered, edges, viewport: getViewport() });
+      return;
+    }
+    void saveCanvas({ nodes: all as typeof nodes, edges, viewport: getViewport() });
+  }, [edges, getNodes, getViewport, saveCanvas, setNodes]);
 
   const noteMoveEnd = useCallback((_: unknown, viewport: Viewport) => {
 void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
@@ -696,11 +718,14 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     : null;
 
   // 生成节点(type==='generator')是表单卡片,不应弹出图片操作条(下载/抠图/二次编辑)。
-  const selectedActionAnchor = (selectedActionNode && selectedActionNode.type !== 'generator') ? actionBarAnchor({
-    x: selectedActionNode.position.x,
-    y: selectedActionNode.position.y,
-    width: Number(selectedActionNode.data?.width || 240),
-    height: Number(selectedActionNode.data?.height || 160),
+  // 用「实时节点 + 绝对坐标」定位:子节点 position 是相对父的,直接用会让操作条错位。
+  const selLive = selectedActionNode ? nodes.find((n) => n.id === selectedActionNode.id) ?? selectedActionNode : null;
+  const selAbs = selLive ? absolutePosition(selLive, nodes) : null;
+  const selectedActionAnchor = (selLive && selLive.type !== 'generator' && selAbs) ? actionBarAnchor({
+    x: selAbs.x,
+    y: selAbs.y,
+    width: Number((selLive.data as { width?: number })?.width || 240),
+    height: Number((selLive.data as { height?: number })?.height || 160),
   }, getViewport()) : null;
 
   return (

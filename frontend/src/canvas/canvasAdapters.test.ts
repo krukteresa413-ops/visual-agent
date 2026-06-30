@@ -198,4 +198,36 @@ describe('canvas React Flow adapters', () => {
     expect(flowToLegacyCanvas(flow).connections[0]).toMatchObject(state.connections[0]);
   });
 
+  it('round-trips parentId + child relative position and orders parent before child', () => {
+    const state: LegacyCanvasState = {
+      elements: [
+        // 故意把子元素放在前面,验证 legacyToFlow 会把父排到前面(React Flow 要求父在子前)
+        { id: 'child', type: 'shape', label: '', x: 50, y: 60, width: 40, height: 40, parentId: 'frame', metadata: { shape: 'rect' } },
+        { id: 'frame', type: 'frame', label: '画板', x: 100, y: 100, width: 400, height: 300 },
+      ],
+      connections: [],
+      viewport: { x: 0, y: 0, scale: 1 },
+    };
+
+    const flow = legacyToFlowCanvas(state);
+    expect(flow.nodes.map(node => node.id)).toEqual(['frame', 'child']);
+    const child = flow.nodes.find(node => node.id === 'child');
+    expect(child?.parentId).toBe('frame');
+    expect(child?.position).toEqual({ x: 50, y: 60 }); // 相对父坐标保持不变,不被转成绝对
+
+    const back = flowToLegacyCanvas(flow);
+    expect(back.elements.find(el => el.id === 'child')).toMatchObject({ x: 50, y: 60, parentId: 'frame' });
+  });
+
+  it('does not add parentId to top-level elements', () => {
+    const flow = legacyToFlowCanvas({
+      elements: [{ id: 'a', type: 'image', label: 'A', x: 0, y: 0, width: 100, height: 100 }],
+      connections: [],
+      viewport: { x: 0, y: 0, scale: 1 },
+    });
+
+    expect('parentId' in flow.nodes[0]).toBe(false);
+    expect('parentId' in flowToLegacyCanvas(flow).elements[0]).toBe(false);
+  });
+
 });
