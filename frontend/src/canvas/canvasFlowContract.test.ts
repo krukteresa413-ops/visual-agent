@@ -151,4 +151,27 @@ describe('S3 React Flow canvas contract', () => {
     expect(editableEdge).toContain('relationData.instruction');
   });
 
+  it('CanvasFlow wires a unified commit layer, undo/redo history and editor keyboard shortcuts', () => {
+    const flow = read('components/CanvasFlow.tsx');
+    const history = read('canvas/history.ts');
+
+    // 统一提交层:语义操作走 commit(更新 state + 入栈 + 持久化)
+    expect(flow).toContain('useCanvasHistory');
+    expect(flow).toContain('const commit = useCallback');
+    expect(flow).toContain('pushHistory');
+    expect(flow).toContain('resetHistory');
+    // 撤销/重做 UI(浏览器验证锚点)
+    expect(flow).toContain('data-canvas-undo');
+    expect(flow).toContain('data-canvas-redo');
+    // 关掉 React Flow 内置删除,改走可撤销 + 持久化的自有删除
+    expect(flow).toContain('deleteKeyCode={null}');
+    expect(flow).toContain('deleteSelected');
+    // 快捷键:Undo(z) / Redo(y)
+    expect(flow).toMatch(/key === 'z' \|\| e\.key === 'Z'/);
+    // 历史栈纯函数对外契约
+    expect(history).toContain('export function record');
+    expect(history).toContain('export function undo');
+    expect(history).toContain('export function redo');
+  });
+
 });

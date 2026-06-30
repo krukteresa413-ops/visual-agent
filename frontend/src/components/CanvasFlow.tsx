@@ -19,6 +19,7 @@ import { api } from '../api/client';
 import { legacyToFlowCanvas, upsertFlowCanvasNode } from '../canvas/canvasAdapters';
 import { absolutePosition, orderByParent, resolveContainment } from '../canvas/frameNesting';
 import { useCanvasPersistence } from '../canvas/useCanvasPersistence';
+import { useCanvasHistory } from '../canvas/useCanvasHistory';
 import { buildSelectionContext, type SelectionContextItem } from '../canvas/selectionContext';
 import type { FlowCanvasState, LegacyCanvasState } from '../canvas/canvasTypes';
 import AssetNode from './nodes/AssetNode';
@@ -112,15 +113,55 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   const { getNodes, getEdges, getViewport, screenToFlowPosition } = useReactFlow();
   const { saveCanvas, rememberSavedCanvas } = useCanvasPersistence(projectId);
 
+  // L0 编辑器地基:统一提交层 + 撤销/重做。所有「语义操作完成」点都走 commit(更新 state + 入撤销栈 + 持久化);
+  // Undo/Redo 直接还原快照(绕过 commit,故撤销动作本身不会再被记进历史)。快照存 React Flow 运行时引用,
+  // 配合不可变更新即可一步还原,且保留节点上的 onGenerate/onLabelCommit 等函数引用。
+  type CanvasSnapshot = { nodes: typeof nodes; edges: typeof edges };
+  const { reset: resetHistory, push: pushHistory, undo: undoHistory, redo: redoHistory, canUndo, canRedo } = useCanvasHistory<CanvasSnapshot>();
+
+  const commit = useCallback((next: { nodes?: typeof nodes; edges?: typeof edges }) => {
+    const nextNodes = next.nodes ?? (getNodes() as typeof nodes);
+    const nextEdges = next.edges ?? (getEdges() as typeof edges);
+    if (next.nodes) setNodes(nextNodes);
+    if (next.edges) setEdges(nextEdges);
+    pushHistory({ nodes: nextNodes, edges: nextEdges });
+    void saveCanvas({ nodes: nextNodes, edges: nextEdges, viewport: getViewport() });
+  }, [getNodes, getEdges, getViewport, pushHistory, saveCanvas, setNodes, setEdges]);
+
+  const applySnapshot = useCallback((snap: CanvasSnapshot) => {
+    setNodes(snap.nodes);
+    setEdges(snap.edges);
+    void saveCanvas({ nodes: snap.nodes, edges: snap.edges, viewport: getViewport() });
+  }, [getViewport, saveCanvas, setNodes, setEdges]);
+
+  const handleUndo = useCallback(() => { const s = undoHistory(); if (s) applySnapshot(s); }, [applySnapshot, undoHistory]);
+  const handleRedo = useCallback(() => { const s = redoHistory(); if (s) applySnapshot(s); }, [applySnapshot, redoHistory]);
+
+  // 删除选中:含被删画板的子节点 + 关联边一并清除,走 commit(可撤销 + 持久化)。
+  const deleteSelected = useCallback(() => {
+    const all = getNodes() as typeof nodes;
+    const removed = new Set(all.filter((n) => n.selected).map((n) => n.id));
+    if (removed.size === 0) return;
+    // 连带删除挂在被删画板下的子节点(支持多层嵌套),据完整删除集再清掉悬空边
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const n of all) {
+        if (n.parentId && removed.has(n.parentId) && !removed.has(n.id)) { removed.add(n.id); grew = true; }
+      }
+    }
+    const remaining = all.filter((n) => !removed.has(n.id));
+    const remainingEdges = (getEdges() as typeof edges).filter((e) => !removed.has(e.source) && !removed.has(e.target));
+    commit({ nodes: remaining, edges: remainingEdges });
+    setSelectedActionNode(null);
+  }, [commit, getNodes, getEdges]);
+
   const onRelationLabelCommit = useCallback((edgeId: string, label: string) => {
-    setEdges(current => {
-      const nextEdges = current.map(edge => edge.id === edgeId
-        ? { ...edge, label, data: { ...edge.data, label } }
-        : edge);
-      void saveCanvas({ nodes: getNodes() as typeof nodes, edges: nextEdges, viewport: getViewport() });
-      return nextEdges;
-    });
-  }, [getNodes, getViewport, saveCanvas, setEdges]);
+    const nextEdges = (getEdges() as typeof edges).map(edge => edge.id === edgeId
+      ? { ...edge, label, data: { ...edge.data, label } }
+      : edge);
+    commit({ edges: nextEdges });
+  }, [commit, getEdges]);
 
   const makeEditableRelationEdges = useCallback((flowEdges: Edge[]): typeof edges => flowEdges.map(edge => ({
     ...edge,
@@ -152,6 +193,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
       setEdges(makeEditableRelationEdges(flow.edges));
       setInitialViewport(flow.viewport);
       rememberSavedCanvas({ nodes: flow.nodes, edges: makeEditableRelationEdges(flow.edges), viewport: flow.viewport });
+      resetHistory({ nodes: flow.nodes, edges: makeEditableRelationEdges(flow.edges) });
     }).catch(() => {
       if (cancelled) return;
       const flow = legacyToFlowCanvas(buildFallbackState(props));
@@ -159,13 +201,14 @@ function CanvasFlowInner(props: CanvasFlowProps) {
       setEdges(makeEditableRelationEdges(flow.edges));
       setInitialViewport(flow.viewport);
       rememberSavedCanvas({ nodes: flow.nodes, edges: makeEditableRelationEdges(flow.edges), viewport: flow.viewport });
+      resetHistory({ nodes: flow.nodes, edges: makeEditableRelationEdges(flow.edges) });
       setLoadError(true);
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
     return () => { cancelled = true; };
-  }, [makeEditableRelationEdges, projectId]);
+  }, [makeEditableRelationEdges, projectId, resetHistory]);
 
   //  on refresh nonce, re-fetch canvas state and merge new nodes
   const initialCanvasNonceRef = useRef(true);
@@ -193,12 +236,9 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   }, [canvasRefreshNonce, projectId, setNodes]);
 
   const onConnect = useCallback((connection: Connection) => {
-    setEdges(current => {
-      const nextEdges = makeEditableRelationEdges(addEdge(connection, current));
-      void saveCanvas({ nodes: getNodes() as typeof nodes, edges: nextEdges, viewport: getViewport() });
-      return nextEdges;
-    });
-  }, [getNodes, getViewport, makeEditableRelationEdges, saveCanvas, setEdges]);
+    const nextEdges = makeEditableRelationEdges(addEdge(connection, getEdges() as typeof edges));
+    commit({ edges: nextEdges });
+  }, [commit, getEdges, makeEditableRelationEdges]);
 
 
   // 拖拽落定:拖进画板自动归属(绝对→相对父)、拖出自动脱离(相对→绝对),再按「父在子前」
@@ -219,12 +259,11 @@ function CanvasFlowInner(props: CanvasFlowProps) {
         ? { ...n, parentId: change.parentId ?? undefined, position: change.position }
         : n));
       const ordered = orderByParent(updated) as typeof nodes;
-      setNodes(ordered);
-      void saveCanvas({ nodes: ordered, edges, viewport: getViewport() });
+      commit({ nodes: ordered });
       return;
     }
-    void saveCanvas({ nodes: all as typeof nodes, edges, viewport: getViewport() });
-  }, [edges, getNodes, getViewport, saveCanvas, setNodes]);
+    commit({ nodes: all as typeof nodes });
+  }, [commit, getNodes]);
 
   const noteMoveEnd = useCallback((_: unknown, viewport: Viewport) => {
 void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
@@ -269,11 +308,9 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       ? edges.map(edge => edge.id === flowEdge.id ? flowEdge : edge)
       : [...edges, flowEdge];
 
-    setNodes(nextNodes);
-    setEdges(nextEdges);
-    void saveCanvas({ nodes: nextNodes, edges: nextEdges, viewport: getViewport() });
+    commit({ nodes: nextNodes, edges: nextEdges });
     return true;
-  }, [edges, getNodes, getViewport, makeEditableRelationEdges, nodes, saveCanvas, setEdges, setNodes]);
+  }, [commit, edges, getNodes, makeEditableRelationEdges, nodes]);
 
   const runCanvasAction = useCallback(async () => {
     const instruction = actionInstruction.trim();
@@ -448,17 +485,15 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     }
     if (id === 'delete') {
       const remaining = getNodes().filter((n) => n.id !== node.id) as typeof nodes;
-      setNodes(remaining);
       setSelectedActionNode(null);
-      void saveCanvas({ nodes: remaining, edges, viewport: getViewport() });
+      commit({ nodes: remaining });
       return;
     }
     if (id === 'front' || id === 'back') {
-      setNodes((current) => {
-        const zs = current.map((n) => Number(n.zIndex ?? 0));
-        const z = id === 'front' ? Math.max(0, ...zs) + 1 : Math.min(0, ...zs) - 1;
-        return current.map((n) => (n.id === node.id ? { ...n, zIndex: z } : n));
-      });
+      const zs = (getNodes() as typeof nodes).map((n) => Number(n.zIndex ?? 0));
+      const z = id === 'front' ? Math.max(0, ...zs) + 1 : Math.min(0, ...zs) - 1;
+      const next = (getNodes() as typeof nodes).map((n) => (n.id === node.id ? { ...n, zIndex: z } : n));
+      commit({ nodes: next });
       return;
     }
     if (id === 'cutout') {
@@ -489,7 +524,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
         setImgActionBusy(null);
       }
     }
-  }, [selectedActionNode, getNodes, setNodes, setSelectedActionNode, saveCanvas, edges, getViewport, projectId, nodes]);
+  }, [selectedActionNode, getNodes, setNodes, setSelectedActionNode, commit, projectId, nodes]);
 
   // 图二 / Phase A:画布底部工具栏 — 选择/上传图已接;AI图/AI视频改为画布内「生成节点」(GeneratorNode)
   const [toolMode, setToolMode] = useState<string>('select');
@@ -507,9 +542,12 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
   const schedulePropSave = useCallback(() => {
     if (propSaveTimer.current) window.clearTimeout(propSaveTimer.current);
     propSaveTimer.current = window.setTimeout(() => {
-      void saveCanvas({ nodes: getNodes() as typeof nodes, edges: getEdges() as typeof edges, viewport: getViewport() });
+      const snapNodes = getNodes() as typeof nodes;
+      const snapEdges = getEdges() as typeof edges;
+      pushHistory({ nodes: snapNodes, edges: snapEdges });
+      void saveCanvas({ nodes: snapNodes, edges: snapEdges, viewport: getViewport() });
     }, 300);
-  }, [saveCanvas, getNodes, getEdges, getViewport]);
+  }, [pushHistory, saveCanvas, getNodes, getEdges, getViewport]);
   useEffect(() => () => { if (propSaveTimer.current) window.clearTimeout(propSaveTimer.current); }, []);
 
   // 把样式 patch 合并进指定节点的 data.metadata;节点已从 metadata 读样式,会即时重渲染。
@@ -531,7 +569,8 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       const url = res?.url; if (!url) throw new Error('no url');
       const pos = nextNodePos();
       const el = { id: 'upload_' + String(getNodes().length) + '_' + url.slice(-10), type: 'image', label: file.name, x: pos.x, y: pos.y, width: 280, height: 280, thumbnail_url: url, asset_ref: { type: 'image', url }, metadata: { source: 'toolbar-upload' } };
-      setNodes((cur) => { const next = upsertFlowCanvasNode(cur, el as never) as typeof cur; void saveCanvas({ nodes: next, edges, viewport: getViewport() }); return next; });
+      const next = upsertFlowCanvasNode(getNodes() as typeof nodes, el as never) as typeof nodes;
+      commit({ nodes: next });
       setCanvasNotice({ kind: 'info', text: '图片已加入画布' });
     } catch { setCanvasNotice({ kind: 'warn', text: '上传失败,请重试' }); }
   };
@@ -574,22 +613,19 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
         const py = gen ? gen.position.y : startNode.position.y;
         const [first, ...rest] = fresh;
         const positioned = { ...first, x: px, y: py, width: params.width, height: params.height };
-        setNodes((cur) => {
-          let next = cur.filter((n) => n.id !== nodeId);
-          next = upsertFlowCanvasNode(next, positioned as never) as typeof cur;
-          rest.forEach((extra: { id: string }, idx: number) => {
-            next = upsertFlowCanvasNode(next, { ...extra, x: px + (params.width + 40) * (idx + 1), y: py } as never) as typeof cur;
-          });
-          void saveCanvas({ nodes: next, edges: getEdges() as typeof edges, viewport: getViewport() });
-          return next;
+        let next = (getNodes() as typeof nodes).filter((n) => n.id !== nodeId);
+        next = upsertFlowCanvasNode(next, positioned as never) as typeof nodes;
+        rest.forEach((extra: { id: string }, idx: number) => {
+          next = upsertFlowCanvasNode(next, { ...extra, x: px + (params.width + 40) * (idx + 1), y: py } as never) as typeof nodes;
         });
+        commit({ nodes: next });
         return;
       }
       fail(kind === 'video' ? '视频仍在渲染,请稍后重试或刷新画布' : '生成超时,图像服务可能繁忙,请稍后重试');
     } catch {
       fail(kind === 'video' ? '视频生成失败,请稍后重试' : '生成失败,请稍后重试');
     }
-  }, [getNodes, getEdges, getViewport, projectId, saveCanvas, setNodes]);
+  }, [getNodes, projectId, setNodes, commit]);
 
   const dropGenerator = (kind: 'image' | 'video') => {
     const pos = nextNodePos();
@@ -630,13 +666,10 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
     const id = `mark_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     const el = { id, type: 'mark', label: '批注', x: pos.x, y: pos.y, width: 160, height: 32 };
-    setNodes((cur) => {
-      const next = upsertFlowCanvasNode(cur, el as never) as typeof cur;
-      void saveCanvas({ nodes: next, edges: getEdges() as typeof edges, viewport: getViewport() });
-      return next;
-    });
-    setPendingTool(null);
-  }, [pendingTool, screenToFlowPosition, setNodes, saveCanvas, getEdges, getViewport]);
+    const next = upsertFlowCanvasNode(getNodes() as typeof nodes, el as never) as typeof nodes;
+    commit({ nodes: next });
+    // 连续放置:保持标记工具可继续点放;按 Esc 或 V 退出
+  }, [pendingTool, screenToFlowPosition, getNodes, commit]);
 
   // 拖拽创建:图形/文字/画板。拖出的矩形 = 节点包围盒;拖动过小(dragged=false)落默认尺寸兜底。
   // 线/箭头记录拖拽终点所在角(metadata.endCorner: tl/tr/bl/br),供 ShapeNode 定线向与箭头朝向。
@@ -666,13 +699,10 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
         ? { id, type: 'shape', label: '', x, y, width: Math.max(12, dw), height: Math.max(12, dh), metadata: meta }
         : { id, type: 'shape', label: '', x: start.x, y: start.y, width: 160, height: isLine ? 100 : 120, metadata: meta };
     }
-    setNodes((cur) => {
-      const next = upsertFlowCanvasNode(cur, el as never) as typeof cur;
-      void saveCanvas({ nodes: next, edges: getEdges() as typeof edges, viewport: getViewport() });
-      return next;
-    });
-    setPendingTool(null);
-  }, [pendingTool, setNodes, saveCanvas, getEdges, getViewport]);
+    const next = upsertFlowCanvasNode(getNodes() as typeof nodes, el as never) as typeof nodes;
+    commit({ nodes: next });
+    // 连续放置:保持当前工具可继续拖拽创建;按 Esc 或 V 退出放置模式
+  }, [pendingTool, getNodes, commit]);
 
   // 画笔落定:把 flow 采样点 → 包围盒定位 + perfect-freehand 轮廓 → FreedrawNode
   const onFreedrawComplete = useCallback((flowPts: Array<{ x: number; y: number }>, color: string, baseSize: number) => {
@@ -690,20 +720,30 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     const height = maxY - minY + pad * 2;
     const id = `freedraw_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
     const el = { id, type: 'freedraw', label: '', x: minX - pad, y: minY - pad, width, height, metadata: { path, color } };
-    setNodes((cur) => {
-      const next = upsertFlowCanvasNode(cur, el as never) as typeof cur;
-      void saveCanvas({ nodes: next, edges: getEdges() as typeof edges, viewport: getViewport() });
-      return next;
-    });
-  }, [setNodes, saveCanvas, getEdges, getViewport]);
+    const next = upsertFlowCanvasNode(getNodes() as typeof nodes, el as never) as typeof nodes;
+    commit({ nodes: next });
+  }, [getNodes, commit]);
 
-  // Esc 退出任意「放置/画笔」模式
+  // L0:画布级键盘快捷键 — Undo/Redo、V/H 切选择/移动、Delete 删除选中、Esc 退出放置。
+  // 在 input/textarea/contentEditable 编辑时只放行 Undo/Redo,其余画布键不拦截(避免打字误删节点)。
   useEffect(() => {
-    if (!pendingTool) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPendingTool(null); };
+    const isEditing = (t: EventTarget | null) => {
+      const el = t as HTMLElement | null;
+      return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) handleRedo(); else handleUndo(); return; }
+      if (meta && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); handleRedo(); return; }
+      if (e.key === 'Escape') { setPendingTool(null); return; }
+      if (meta || isEditing(e.target)) return;
+      if (e.key === 'v' || e.key === 'V') { setPendingTool(null); setToolMode('select'); return; }
+      if (e.key === 'h' || e.key === 'H') { setPendingTool(null); setToolMode('move'); return; }
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [pendingTool]);
+  }, [handleUndo, handleRedo, deleteSelected]);
 
   // 选中单个 文字/图形/自由绘 节点时弹属性面板;实时从 nodes 取该节点
   // (selectedActionNode 是选中那刻的快照,改样式后会过时,故按 id 取最新)。
@@ -740,7 +780,9 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div data-flow-canvas-stage className="relative min-w-0 flex-1 overflow-hidden">
+        <div data-flow-canvas-stage data-canvas-tool-mode={pendingTool ? 'place' : toolMode} className="relative min-w-0 flex-1 overflow-hidden">
+          {/* V/H/放置 的光标:覆盖 React Flow 内置 .react-flow__pane cursor(更高优先级,据 data-canvas-tool-mode) */}
+          <style>{`[data-canvas-tool-mode="place"] .react-flow__pane{cursor:crosshair}[data-canvas-tool-mode="select"] .react-flow__pane{cursor:default}[data-canvas-tool-mode="move"] .react-flow__pane{cursor:grab}[data-canvas-tool-mode="move"] .react-flow__pane.dragging{cursor:grabbing}`}</style>
           {/* 图二:画布内二次编辑弹窗(替代浏览器原生 prompt) */}
           {reeditNodeId && (
             <div className="absolute inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setReeditNodeId(null)}>
@@ -866,14 +908,25 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
             zoomOnDoubleClick={false}
             selectionOnDrag={toolMode !== 'move'}
             multiSelectionKeyCode={['Meta', 'Control', 'Shift']}
+            deleteKeyCode={null}
             nodesDraggable={toolMode !== 'move'}
             nodesConnectable={true}
             elementsSelectable
-            className={`bg-[#f5f5f5] ${pendingTool ? 'cursor-crosshair' : toolMode === 'move' ? 'cursor-grab' : ''}`}
+            className="bg-[#f5f5f5]"
           >
             <Background gap={32} size={1} color="rgba(0,0,0,0.08)" />
             <Controls position="bottom-right" showInteractive={false} />
             <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} />
+            <Panel position="top-left">
+              <div data-canvas-history className="pointer-events-auto flex items-center gap-0.5 rounded-xl border border-black/10 bg-white px-1 py-1 shadow-[0_4px_16px_rgba(0,0,0,0.1)]">
+                <button data-canvas-undo type="button" title="撤销 (Ctrl+Z)" disabled={!canUndo} onClick={handleUndo} className="grid size-8 place-items-center rounded-lg text-[#2F3640] transition-colors hover:bg-[#F1F3F5] disabled:cursor-not-allowed disabled:opacity-30">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 7L4 12l5 5" /><path d="M4 12h11a5 5 0 0 1 0 10h-1" /></svg>
+                </button>
+                <button data-canvas-redo type="button" title="重做 (Ctrl+Shift+Z)" disabled={!canRedo} onClick={handleRedo} className="grid size-8 place-items-center rounded-lg text-[#2F3640] transition-colors hover:bg-[#F1F3F5] disabled:cursor-not-allowed disabled:opacity-30">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M15 7l5 5-5 5" /><path d="M20 12H9a5 5 0 0 0 0 10h1" /></svg>
+                </button>
+              </div>
+            </Panel>
             <Panel position="bottom-center">
               <CanvasToolbar onTool={handleTool} />
             </Panel>
