@@ -19,6 +19,9 @@ import CopywritingPage from './pages/CopywritingPage';
 import NewProjectPage from './pages/NewProjectPage';
 import Layout from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
+import { lazy, Suspense } from 'react';
+// Excalidraw 小样(spike):独立懒加载路由,不影响主包体积/现有画布
+const ExcaliCanvas = lazy(() => import('./components/canvas/ExcaliCanvas'));
 const queryClient = new QueryClient();
 export default function App() {
   return <><ToastContainer /><ErrorBoundary><QueryClientProvider client={queryClient}><BrowserRouter><Layout><Routes>
@@ -36,6 +39,7 @@ export default function App() {
     <Route path='/copywriting' element={<RequireAuth><CopywritingPage /></RequireAuth>} />
     <Route path='/new' element={<RequireAuth><NewProjectPage /></RequireAuth>} />
     <Route path='/brand/:projectId' element={<RequireAuth><BrandPage /></RequireAuth>} />
+    <Route path='/excali/:projectId' element={<RequireAuth><Suspense fallback={<div className='grid h-screen place-items-center text-gray-400'>加载 Excalidraw 画布…</div>}><ExcaliCanvas /></Suspense></RequireAuth>} />
     <Route path='*' element={<Navigate to='/' replace />} />
     <Route path='/campaign/:projectId' element={<RequireAuth><CampaignPage /></RequireAuth>} />
   </Routes></Layout></BrowserRouter></QueryClientProvider></ErrorBoundary></>;

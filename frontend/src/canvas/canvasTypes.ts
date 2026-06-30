@@ -39,11 +39,24 @@ export interface LegacyCanvasState {
   viewport: LegacyCanvasViewport;
 }
 
+// Phase A 生成节点(type==='generator')使用的瞬时字段;均可选,不持久化(序列化前已过滤)。
+// 注意:必须用 type(对象字面量)而非 interface —— 命名 interface 不满足 React Flow
+// Node<T extends Record<string, unknown>> 约束(interface 因可声明合并而被 TS 视为开放)。
+export type GeneratorNodeFields = {
+  kind?: 'image' | 'video';
+  status?: 'idle' | 'generating' | 'error';
+  error?: string;
+  onGenerate?: (
+    id: string,
+    params: { prompt: string; reference_image_url?: string; width: number; height: number; ratio: string; brief: Record<string, unknown> },
+  ) => void;
+};
+
 export type FlowCanvasNodeData = Omit<LegacyCanvasElement, 'x' | 'y' | 'width' | 'height'> & {
   width: number;
   height: number;
   legacy_id?: string;
-};
+} & GeneratorNodeFields;
 
 export type FlowCanvasEdgeData = Omit<LegacyCanvasConnection, 'id' | 'source_id' | 'target_id'> & {
   onLabelCommit?: (edgeId: string, label: string) => void;

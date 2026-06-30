@@ -3,6 +3,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
   addEdge,
@@ -20,7 +21,18 @@ import { useCanvasPersistence } from '../canvas/useCanvasPersistence';
 import { buildSelectionContext, type SelectionContextItem } from '../canvas/selectionContext';
 import type { FlowCanvasState, LegacyCanvasState } from '../canvas/canvasTypes';
 import AssetNode from './nodes/AssetNode';
+import GeneratorNode from './nodes/GeneratorNode';
+import ShapeNode from './nodes/ShapeNode';
+import TextNode from './nodes/TextNode';
+import MarkNode from './nodes/MarkNode';
+import FreedrawNode from './nodes/FreedrawNode';
+import FrameNode from './nodes/FrameNode';
+import FreedrawLayer from './canvas/FreedrawLayer';
+import DragCreateLayer from './canvas/DragCreateLayer';
+import { getStroke, getSvgPathFromStroke, strokeOptions } from '../canvas/freehand';
 import ImageActionBar from './canvas/ImageActionBar';
+import CanvasToolbar from './canvas/CanvasToolbar';
+import CanvasPropertyPanel, { type PropertyPanelKind } from './canvas/CanvasPropertyPanel';
 import EditableRelationEdge from './canvas/EditableRelationEdge';
 import { actionBarAnchor } from './canvas/actionBarAnchor';
 import type CanvasViewLegacy from './CanvasViewLegacy';
@@ -31,6 +43,19 @@ const emptyFlow: FlowCanvasState = {
   nodes: [],
   edges: [],
   viewport: { x: 0, y: 0, zoom: 1 },
+};
+
+// 选中后弹属性面板的节点类型(RF node.type);其余类型(image/generator/frame/mark)不弹。
+const NODE_PANEL_KINDS = new Set(['text', 'shape', 'freedraw']);
+
+// 工具栏「快速图形」下拉 action → ShapeNode 形状种类
+const SHAPE_MAP: Record<string, string> = {
+  'shape-rect': 'rect',
+  'shape-ellipse': 'ellipse',
+  'shape-line': 'line',
+  'shape-arrow': 'arrow',
+  'shape-polygon': 'diamond',
+  'shape-star': 'star',
 };
 
 function buildFallbackState(props: CanvasFlowProps): LegacyCanvasState {
@@ -65,7 +90,7 @@ function buildFallbackState(props: CanvasFlowProps): LegacyCanvasState {
 
 function CanvasFlowInner(props: CanvasFlowProps) {
   const projectId = props.projectId || 2;
-  const nodeTypes = useMemo(() => ({ canvasElement: AssetNode }), []);
+  const nodeTypes = useMemo(() => ({ canvasElement: AssetNode, generator: GeneratorNode, shape: ShapeNode, text: TextNode, mark: MarkNode, freedraw: FreedrawNode, frame: FrameNode }), []);
   const edgeTypes = useMemo(() => ({ editableRelation: EditableRelationEdge }), []);
   const [nodes, setNodes, onNodesChange] = useNodesState(emptyFlow.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(emptyFlow.edges);
@@ -83,7 +108,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   const [reeditText, setReeditText] = useState('');
   const [reeditBusy, setReeditBusy] = useState(false);
   const [canvasNotice, setCanvasNotice] = useState<{ kind: 'info' | 'warn'; text: string } | null>(null);
-  const { getNodes, getViewport } = useReactFlow();
+  const { getNodes, getEdges, getViewport, screenToFlowPosition } = useReactFlow();
   const { saveCanvas, rememberSavedCanvas } = useCanvasPersistence(projectId);
 
   const onRelationLabelCommit = useCallback((edgeId: string, label: string) => {
@@ -444,7 +469,234 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     }
   }, [selectedActionNode, getNodes, setNodes, setSelectedActionNode, saveCanvas, edges, getViewport, projectId, nodes]);
 
-  const selectedActionAnchor = selectedActionNode ? actionBarAnchor({
+  // 图二 / Phase A:画布底部工具栏 — 选择/上传图已接;AI图/AI视频改为画布内「生成节点」(GeneratorNode)
+  const [toolMode, setToolMode] = useState<string>('select');
+  // 文字/标记/图形:进入「放置」模式,下一次点画布落节点
+  const [pendingTool, setPendingTool] = useState<string | null>(null);
+  const toolFileRef = useRef<HTMLInputElement | null>(null);
+
+  // 画笔「下一笔」的颜色/笔宽(自由绘把笔宽烤进几何,必须画前设;由属性面板控制)
+  const [penColor, setPenColor] = useState('#111827');
+  const [penSize, setPenSize] = useState(6);
+
+  // 属性面板改 metadata 走高频 onChange(取色器/滑块);保存按 300ms 防抖,避免刷爆后端
+  // (saveCanvas 按 JSON 去重但不做时间防抖)。
+  const propSaveTimer = useRef<number | null>(null);
+  const schedulePropSave = useCallback(() => {
+    if (propSaveTimer.current) window.clearTimeout(propSaveTimer.current);
+    propSaveTimer.current = window.setTimeout(() => {
+      void saveCanvas({ nodes: getNodes() as typeof nodes, edges: getEdges() as typeof edges, viewport: getViewport() });
+    }, 300);
+  }, [saveCanvas, getNodes, getEdges, getViewport]);
+  useEffect(() => () => { if (propSaveTimer.current) window.clearTimeout(propSaveTimer.current); }, []);
+
+  // 把样式 patch 合并进指定节点的 data.metadata;节点已从 metadata 读样式,会即时重渲染。
+  const updateNodeMeta = useCallback((nodeId: string, patch: Record<string, unknown>) => {
+    setNodes((cur) => cur.map((n) => (n.id === nodeId
+      ? { ...n, data: { ...n.data, metadata: { ...((n.data.metadata as Record<string, unknown>) || {}), ...patch } } }
+      : n)));
+    schedulePropSave();
+  }, [setNodes, schedulePropSave]);
+
+  const nextNodePos = () => { const n = getNodes().length; return { x: 80 + (n % 5) * 360, y: 80 + Math.floor(n / 5) * 320 }; };
+
+  const handleToolUploadFile = async (file: File | undefined) => {
+    if (!file) return;
+    setCanvasNotice({ kind: 'info', text: '正在上传图片…' });
+    try {
+      const form = new FormData(); form.append('file', file);
+      const res = await api.upload.image(form) as { url?: string };
+      const url = res?.url; if (!url) throw new Error('no url');
+      const pos = nextNodePos();
+      const el = { id: 'upload_' + String(getNodes().length) + '_' + url.slice(-10), type: 'image', label: file.name, x: pos.x, y: pos.y, width: 280, height: 280, thumbnail_url: url, asset_ref: { type: 'image', url }, metadata: { source: 'toolbar-upload' } };
+      setNodes((cur) => { const next = upsertFlowCanvasNode(cur, el as never) as typeof cur; void saveCanvas({ nodes: next, edges, viewport: getViewport() }); return next; });
+      setCanvasNotice({ kind: 'info', text: '图片已加入画布' });
+    } catch { setCanvasNotice({ kind: 'warn', text: '上传失败,请重试' }); }
+  };
+
+  // Phase A:画布内「AI 图/视频生成节点」的生成动作(由节点通过 data.onGenerate 调用)。
+  // 复用已验证的 quickGenerate → 轮询 getState diff 管线;拿到后端新元素后,把该「生成节点」
+  // 就地替换成标准图片/视频节点(沿用后端真实 id/asset_ref,从而继承下载/抠图/二次编辑/关系线);
+  // saveCanvas 是整张画布的权威覆盖写,因此后端临时落下的同一元素不会重复。
+  const onGeneratorRun = useCallback(async (
+    nodeId: string,
+    params: { prompt: string; reference_image_url?: string; width: number; height: number; ratio: string; brief: Record<string, unknown> },
+  ) => {
+    const startNode = getNodes().find((n) => n.id === nodeId);
+    if (!startNode) return;
+    const kind = (startNode.data as { kind?: string })?.kind === 'video' ? 'video' : 'image';
+    const prompt = params.prompt.trim();
+    if (!prompt) return;
+
+    setNodes((cur) => cur.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, status: 'generating' as const, error: undefined } } : n)));
+    const before = new Set(getNodes().map((n) => String((n.data as { legacy_id?: string })?.legacy_id || n.id)));
+    const fail = (text: string) => setNodes((cur) => cur.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, status: 'error' as const, error: text } } : n)));
+
+    try {
+      await api.generation.quickGenerate({
+        prompt,
+        project_id: projectId,
+        agent_mode: kind === 'video' ? 'video-gen' : 'image-gen',
+        auto_model: true,
+        brief: params.brief,
+        ...(params.reference_image_url ? { reference_image_url: params.reference_image_url } : {}),
+      });
+      const rounds = kind === 'video' ? 25 : 16;
+      for (let i = 0; i < rounds; i += 1) {
+        await new Promise((r) => window.setTimeout(r, kind === 'video' ? 6000 : 3000));
+        const data = await api.atelierCanvas.getState(projectId);
+        const fresh = (data?.elements || []).filter((el: { id: string }) => !before.has(String(el.id)));
+        if (!fresh.length) continue;
+        const gen = getNodes().find((n) => n.id === nodeId);
+        const px = gen ? gen.position.x : startNode.position.x;
+        const py = gen ? gen.position.y : startNode.position.y;
+        const [first, ...rest] = fresh;
+        const positioned = { ...first, x: px, y: py, width: params.width, height: params.height };
+        setNodes((cur) => {
+          let next = cur.filter((n) => n.id !== nodeId);
+          next = upsertFlowCanvasNode(next, positioned as never) as typeof cur;
+          rest.forEach((extra: { id: string }, idx: number) => {
+            next = upsertFlowCanvasNode(next, { ...extra, x: px + (params.width + 40) * (idx + 1), y: py } as never) as typeof cur;
+          });
+          void saveCanvas({ nodes: next, edges: getEdges() as typeof edges, viewport: getViewport() });
+          return next;
+        });
+        return;
+      }
+      fail(kind === 'video' ? '视频仍在渲染,请稍后重试或刷新画布' : '生成超时,图像服务可能繁忙,请稍后重试');
+    } catch {
+      fail(kind === 'video' ? '视频生成失败,请稍后重试' : '生成失败,请稍后重试');
+    }
+  }, [getNodes, getEdges, getViewport, projectId, saveCanvas, setNodes]);
+
+  const dropGenerator = (kind: 'image' | 'video') => {
+    const pos = nextNodePos();
+    const width = kind === 'video' ? 360 : 300;
+    const height = kind === 'video' ? 203 : 300;
+    const id = `gen_${kind}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const node = { id, type: 'generator', position: pos, width, data: { kind, status: 'idle', width, height, onGenerate: onGeneratorRun } };
+    setNodes((cur) => [...cur, node as never]);
+    setCanvasNotice({ kind: 'info', text: kind === 'video' ? '已添加视频生成器,填入描述后点「生成」' : '已添加图片生成器,填入描述后点「生成」' });
+  };
+
+  // 工具栏动作分发(action id 由 CanvasToolbar 的下拉/按钮给出)
+  const handleTool = (action: string) => {
+    if (action === 'select') { setPendingTool(null); setToolMode('select'); return; }
+    if (action === 'move') { setPendingTool(null); setToolMode('move'); return; }
+    if (action === 'upload-image') { setPendingTool(null); toolFileRef.current?.click(); return; }
+    if (action === 'upload-video') { setCanvasNotice({ kind: 'info', text: '上传视频即将上线' }); return; }
+    if (action === 'ai-image') { setPendingTool(null); dropGenerator('image'); return; }
+    if (action === 'ai-video') { setPendingTool(null); dropGenerator('video'); return; }
+    // 画笔:进入持续绘制模式(覆盖层),双击/换工具退出;模式与颜色/笔宽由属性面板呈现
+    if (action === 'pen') { setPendingTool('pen'); return; }
+    // 标记:点状批注,点击放置;文字/画板/图形:拖拽创建(覆盖层有自带提示,不再弹 toast)
+    if (action === 'mark') {
+      setPendingTool('mark');
+      setCanvasNotice({ kind: 'info', text: '在画布上点击放置标记' });
+      return;
+    }
+    if (action === 'text' || action === 'frame' || action.startsWith('shape-')) {
+      setPendingTool(action);
+      return;
+    }
+    setCanvasNotice({ kind: 'info', text: '该工具即将上线' });
+  };
+
+  // 标记/图钉是点状批注(无尺寸),保留点击放置;图形/文字/画板走拖拽层,画笔走画笔层。
+  const onPaneClick = useCallback((e: React.MouseEvent) => {
+    if (pendingTool !== 'mark') return;
+    const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    const id = `mark_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const el = { id, type: 'mark', label: '批注', x: pos.x, y: pos.y, width: 160, height: 32 };
+    setNodes((cur) => {
+      const next = upsertFlowCanvasNode(cur, el as never) as typeof cur;
+      void saveCanvas({ nodes: next, edges: getEdges() as typeof edges, viewport: getViewport() });
+      return next;
+    });
+    setPendingTool(null);
+  }, [pendingTool, screenToFlowPosition, setNodes, saveCanvas, getEdges, getViewport]);
+
+  // 拖拽创建:图形/文字/画板。拖出的矩形 = 节点包围盒;拖动过小(dragged=false)落默认尺寸兜底。
+  // 线/箭头记录拖拽终点所在角(metadata.endCorner: tl/tr/bl/br),供 ShapeNode 定线向与箭头朝向。
+  const onDragCreateComplete = useCallback((start: { x: number; y: number }, end: { x: number; y: number }, dragged: boolean) => {
+    const tool = pendingTool;
+    if (!tool) return;
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    const dw = Math.round(Math.abs(end.x - start.x));
+    const dh = Math.round(Math.abs(end.y - start.y));
+    const id = `${tool}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    let el: Record<string, unknown>;
+    if (tool === 'text') {
+      el = dragged
+        ? { id, type: 'text', label: '文字', x, y, width: Math.max(48, dw), height: Math.max(28, dh), metadata: { fontSize: 18 } }
+        : { id, type: 'text', label: '文字', x: start.x, y: start.y, width: 120, height: 40, metadata: { fontSize: 18 } };
+    } else if (tool === 'frame') {
+      el = dragged
+        ? { id, type: 'frame', label: '画板', x, y, width: Math.max(120, dw), height: Math.max(90, dh) }
+        : { id, type: 'frame', label: '画板', x: start.x, y: start.y, width: 400, height: 300 };
+    } else {
+      const shape = SHAPE_MAP[tool] || 'rect';
+      const isLine = shape === 'line' || shape === 'arrow';
+      const meta: Record<string, unknown> = { shape };
+      if (isLine && dragged) meta.endCorner = (end.y - start.y >= 0 ? 'b' : 't') + (end.x - start.x >= 0 ? 'r' : 'l');
+      el = dragged
+        ? { id, type: 'shape', label: '', x, y, width: Math.max(12, dw), height: Math.max(12, dh), metadata: meta }
+        : { id, type: 'shape', label: '', x: start.x, y: start.y, width: 160, height: isLine ? 100 : 120, metadata: meta };
+    }
+    setNodes((cur) => {
+      const next = upsertFlowCanvasNode(cur, el as never) as typeof cur;
+      void saveCanvas({ nodes: next, edges: getEdges() as typeof edges, viewport: getViewport() });
+      return next;
+    });
+    setPendingTool(null);
+  }, [pendingTool, setNodes, saveCanvas, getEdges, getViewport]);
+
+  // 画笔落定:把 flow 采样点 → 包围盒定位 + perfect-freehand 轮廓 → FreedrawNode
+  const onFreedrawComplete = useCallback((flowPts: Array<{ x: number; y: number }>, color: string, baseSize: number) => {
+    if (flowPts.length < 2) return;
+    const xs = flowPts.map((p) => p.x);
+    const ys = flowPts.map((p) => p.y);
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    const maxX = Math.max(...xs);
+    const maxY = Math.max(...ys);
+    const pad = baseSize * 2;
+    const rel = flowPts.map((p) => [p.x - minX + pad, p.y - minY + pad]);
+    const path = getSvgPathFromStroke(getStroke(rel, strokeOptions(baseSize)));
+    const width = maxX - minX + pad * 2;
+    const height = maxY - minY + pad * 2;
+    const id = `freedraw_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const el = { id, type: 'freedraw', label: '', x: minX - pad, y: minY - pad, width, height, metadata: { path, color } };
+    setNodes((cur) => {
+      const next = upsertFlowCanvasNode(cur, el as never) as typeof cur;
+      void saveCanvas({ nodes: next, edges: getEdges() as typeof edges, viewport: getViewport() });
+      return next;
+    });
+  }, [setNodes, saveCanvas, getEdges, getViewport]);
+
+  // Esc 退出任意「放置/画笔」模式
+  useEffect(() => {
+    if (!pendingTool) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPendingTool(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pendingTool]);
+
+  // 选中单个 文字/图形/自由绘 节点时弹属性面板;实时从 nodes 取该节点
+  // (selectedActionNode 是选中那刻的快照,改样式后会过时,故按 id 取最新)。
+  const selectedId = selectedActionNode?.id ?? null;
+  const liveSelected = useMemo(
+    () => (selectedId ? nodes.find((n) => n.id === selectedId) ?? null : null),
+    [nodes, selectedId],
+  );
+  const showPenPanel = pendingTool === 'pen';
+  const selectedPanelKind: PropertyPanelKind | null = !showPenPanel && liveSelected && NODE_PANEL_KINDS.has(String(liveSelected.type))
+    ? (String(liveSelected.type) as PropertyPanelKind)
+    : null;
+
+  // 生成节点(type==='generator')是表单卡片,不应弹出图片操作条(下载/抠图/二次编辑)。
+  const selectedActionAnchor = (selectedActionNode && selectedActionNode.type !== 'generator') ? actionBarAnchor({
     x: selectedActionNode.position.x,
     y: selectedActionNode.position.y,
     width: Number(selectedActionNode.data?.width || 240),
@@ -498,6 +750,25 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
               </span>
             </div>
           )}
+          {/* 属性面板:画笔(画前设色/笔宽)或选中节点(就地改 metadata 样式)。顶部居中浮条。 */}
+          {(showPenPanel || selectedPanelKind) && (
+            <div className="pointer-events-none absolute left-1/2 top-3 z-40 -translate-x-1/2">
+              {showPenPanel ? (
+                <CanvasPropertyPanel
+                  kind="pen"
+                  values={{ color: penColor, size: penSize }}
+                  onChange={(p) => { if (typeof p.color === 'string') setPenColor(p.color); if (typeof p.size === 'number') setPenSize(p.size); }}
+                  onExitPen={() => setPendingTool(null)}
+                />
+              ) : liveSelected && selectedPanelKind ? (
+                <CanvasPropertyPanel
+                  kind={selectedPanelKind}
+                  values={(liveSelected.data.metadata as Record<string, unknown>) || {}}
+                  onChange={(p) => updateNodeMeta(liveSelected.id, p)}
+                />
+              ) : null}
+            </div>
+          )}
           {false && (
           <div
             data-ai-companion
@@ -548,6 +819,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
           </div>
           )}
           {selectedActionAnchor && <ImageActionBar left={selectedActionAnchor.left} top={selectedActionAnchor.top} onAction={handleImageAction} busy={imgActionBusy} elementType={String((selectedActionNode?.data as { type?: string })?.type || '')} />}
+          <input ref={toolFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (e.target) e.target.value = ''; void handleToolUploadFile(f || undefined); }} />
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -559,24 +831,35 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
             onNodeDragStop={noteDragStop}
             onMoveEnd={noteMoveEnd}
             onSelectionChange={noteSelectionChange}
+            onPaneClick={onPaneClick}
             defaultViewport={initialViewport}
             minZoom={0.15}
             maxZoom={3}
-            panOnDrag
+            panOnDrag={toolMode === 'move' ? true : [1, 2]}
             zoomOnScroll
             zoomOnPinch
             zoomOnDoubleClick={false}
-            selectionOnDrag
+            selectionOnDrag={toolMode !== 'move'}
             multiSelectionKeyCode={['Meta', 'Control', 'Shift']}
-            nodesDraggable
+            nodesDraggable={toolMode !== 'move'}
             nodesConnectable={true}
             elementsSelectable
-            className="bg-[#f5f5f5]"
+            className={`bg-[#f5f5f5] ${pendingTool ? 'cursor-crosshair' : toolMode === 'move' ? 'cursor-grab' : ''}`}
           >
             <Background gap={32} size={1} color="rgba(0,0,0,0.08)" />
             <Controls position="bottom-right" showInteractive={false} />
             <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} />
+            <Panel position="bottom-center">
+              <CanvasToolbar onTool={handleTool} />
+            </Panel>
           </ReactFlow>
+          {pendingTool === 'pen' && (
+            <FreedrawLayer color={penColor} size={penSize} onComplete={onFreedrawComplete} onExit={() => setPendingTool(null)} />
+          )}
+          {/* 图形/文字/画板:拖拽创建(标记走点击,画笔走画笔层) */}
+          {pendingTool && pendingTool !== 'pen' && pendingTool !== 'mark' && (
+            <DragCreateLayer onComplete={onDragCreateComplete} />
+          )}
         </div>
       </div>
     </div>

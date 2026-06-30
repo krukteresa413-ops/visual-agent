@@ -1,5 +1,18 @@
 import type { FlowCanvasState, LegacyCanvasConnection, LegacyCanvasElement, LegacyCanvasState } from './canvasTypes';
 
+// 工具栏小工具用专属 React Flow 节点类型渲染;其余素材沿用 AssetNode(canvasElement)。
+// 元素的逻辑类型(element.type)存在 data.type 里,据此选渲染组件,保证回流时不被打回 canvasElement。
+const NODE_TYPE_BY_ELEMENT: Record<string, string> = {
+  shape: 'shape',
+  text: 'text',
+  mark: 'mark',
+  freedraw: 'freedraw',
+  frame: 'frame',
+};
+function nodeTypeForElement(elementType: string): string {
+  return NODE_TYPE_BY_ELEMENT[elementType] || 'canvasElement';
+}
+
 export function legacyToFlowCanvas(state: LegacyCanvasState): FlowCanvasState {
   const seenIds = new Map<string, number>();
 
@@ -11,7 +24,7 @@ export function legacyToFlowCanvas(state: LegacyCanvasState): FlowCanvasState {
 
       return {
         id: runtimeId,
-        type: 'canvasElement',
+        type: nodeTypeForElement(element.type),
         position: { x: element.x, y: element.y },
         width: element.width,
         height: element.height,
@@ -43,7 +56,8 @@ export function legacyToFlowCanvas(state: LegacyCanvasState): FlowCanvasState {
 
 export function flowToLegacyCanvas(state: FlowCanvasState): LegacyCanvasState {
   return {
-    elements: state.nodes.map(node => {
+    // Phase A:「生成节点」(type==='generator')是临时输入卡片,不持久化(否则回流会变成空的 AssetNode)。
+    elements: state.nodes.filter(node => node.type !== 'generator').map(node => {
       const { legacy_id: legacyId, ...data } = node.data;
       return {
         ...data,

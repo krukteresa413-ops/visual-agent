@@ -147,6 +147,32 @@ describe('canvas React Flow adapters', () => {
   });
 
 
+  it('drops transient generator nodes from persisted Flow→Legacy state', () => {
+    const flow = {
+      nodes: [
+        {
+          id: 'asset-1',
+          type: 'canvasElement',
+          position: { x: 0, y: 0 },
+          data: { type: 'image', label: 'A', width: 100, height: 100, legacy_id: 'asset-1' },
+        },
+        {
+          id: 'gen_image_1',
+          type: 'generator',
+          position: { x: 200, y: 0 },
+          data: { kind: 'image', status: 'idle', type: 'generator', label: 'gen', width: 300, height: 300 },
+        },
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    } as unknown as Parameters<typeof flowToLegacyCanvas>[0];
+
+    const legacy = flowToLegacyCanvas(flow);
+
+    expect(legacy.elements).toHaveLength(1);
+    expect(legacy.elements[0].id).toBe('asset-1');
+  });
+
   it('preserves connection metadata through Legacy→Flow conversion', () => {
     const state: LegacyCanvasState = {
       elements: [
