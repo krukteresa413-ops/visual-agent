@@ -31,7 +31,7 @@ class GeneratedVideo(BaseModel):
 
 class VideoGenerationResult(BaseModel):
     provider: str
-    status: Literal["succeeded", "failed"]
+    status: Literal["succeeded", "failed", "submitted"]
     videos: list[GeneratedVideo] = Field(default_factory=list)
 
 

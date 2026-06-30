@@ -83,6 +83,13 @@ interface Props {
 
 const runningMessage = '正在生成，详细过程已移到底部 AI创作流程。';
 
+// 视频意图检测:Agent 自动模式首轮命中则直接走视频生成(跳过商品 12 问/图片路径)
+const VIDEO_INTENT_KEYWORDS = ['视频', '动画', '短片', 'video', 'animation', 'movie', 'clip', 'footage'];
+function isVideoIntent(text: string): boolean {
+  const t = (text || '').toLowerCase();
+  return VIDEO_INTENT_KEYWORDS.some((k) => t.includes(k));
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -190,6 +197,27 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   };
 
   const clearUploadedFile = () => setUploadedFile(null);
+
+  const videoPollRef = useRef<number | null>(null);
+  const pollVideoUntilReady = (taskId: string) => {
+    if (videoPollRef.current) window.clearInterval(videoPollRef.current);
+    let tries = 0;
+    videoPollRef.current = window.setInterval(async () => {
+      tries += 1;
+      if (tries > 120) { if (videoPollRef.current) window.clearInterval(videoPollRef.current); return; }
+      try {
+        const st = await api.generation.videoTaskStatus(taskId);
+        if (st.status === 'succeeded') {
+          if (videoPollRef.current) window.clearInterval(videoPollRef.current);
+          onCanvasShouldRefresh?.();
+          dispatch({ type: 'assistantStatus', step: '完成', content: '视频渲染完成,已同步到画布。', status: 'completed', percent: 100 });
+        } else if (st.status === 'failed') {
+          if (videoPollRef.current) window.clearInterval(videoPollRef.current);
+          dispatch({ type: 'assistantStatus', step: '出错', content: '视频渲染失败,请重试。', status: 'error', percent: 0 });
+        }
+      } catch { /* keep polling */ }
+    }, 8000);
+  };
 
   const runChat = async (prompt: string) => {
     const promptWithContext = chatAssetContext?.image_url
@@ -316,6 +344,10 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
               timestamp: Date.now(),
             }]);
             onGenerationComplete?.(latest.generation);
+            if (isVideo) {
+              const vTaskId = (gen?.video as { task_id?: string } | undefined)?.task_id;
+              if (vTaskId) pollVideoUntilReady(vTaskId);
+            }
           } else if (latest.status === 'error') {
             finished = true;
             window.clearInterval(poll);
@@ -431,6 +463,12 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   //  - 纯文字 -> 解析 brief,够详细则直接出图,不够才追问(且只问识别不到的缺口)
   const routeFirstAgentTurn = async (seed: string) => {
     const imgUrl = (uploadedFile?.type === 'image' ? uploadedFile.url : undefined) || chatAssetContext?.image_url || null;
+    // 视频意图 -> 直接走视频生成(跳过商品 12 问与图片路径);有源图则作首帧 I2V
+    if (isVideoIntent(seed)) {
+      setQaDone(true);
+      void runGeneration(seed, undefined, 'video-gen', imgUrl || undefined);
+      return;
+    }
     if (imgUrl) {
       setQaDone(true);
       void runGeneration(seed, undefined, 'image-gen', imgUrl);
@@ -476,6 +514,9 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // 卸载时清理视频轮询
+  useEffect(() => () => { if (videoPollRef.current) window.clearInterval(videoPollRef.current); }, []);
 
   // Subscribe to SSE progress
   useEffect(() => {

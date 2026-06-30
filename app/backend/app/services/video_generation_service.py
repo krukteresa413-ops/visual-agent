@@ -1,5 +1,6 @@
 """Video generation service — provider registry + local placeholder."""
 import hashlib
+import json
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -699,13 +700,21 @@ class DataEyesAIVideoProvider(VideoGenerationProvider):
                 prompt=request.prompt,
                 duration=duration,
                 options_json=json.dumps(opts) if opts else None,
-                project_id=getattr(request, 'project_id', None),
+                project_id=opts.get("project_id") or getattr(request, 'project_id', None),
             )
             db.add(vt)
             db.commit()
             db.close()
-        except Exception:
-            pass  # DB persistence is best-effort; polling still works in-memory
+        except Exception as _persist_err:
+            import logging as _logging
+            _logging.getLogger("uvicorn.error").warning("VideoTask persist failed: %s", _persist_err)
+
+        # ── Submit-only: 提交即返回,交后台 worker 轮询(异步出片) ──
+        if opts.get("submit_only"):
+            return VideoGenerationResult(
+                provider="dataeyes", status="submitted",
+                videos=[GeneratedVideo(url="", duration=duration, provider_asset_id=task_id)],
+            )
 
         # ── Poll ──
         import asyncio

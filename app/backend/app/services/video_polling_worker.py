@@ -46,6 +46,23 @@ async def _download_video(url: str, task_id: str) -> str | None:
     return None
 
 
+def _seed_video_to_canvas(task: VideoTask, db: Session) -> None:
+    """成功后把视频作为元素落到项目画布(CanvasState)。失败不影响任务状态。"""
+    if not task.project_id or not (task.local_path or task.video_url):
+        return
+    try:
+        from app.api.unified_generation_routes import _ensure_canvas_image_elements
+        _ensure_canvas_image_elements(db, int(task.project_id), {
+            "video": {
+                "url": task.local_path or task.video_url,
+                "duration": task.duration,
+                "task_id": task.provider_task_id,
+            }
+        })
+    except Exception:
+        pass
+
+
 async def poll_single_task(task: VideoTask, db: Session) -> bool:
     """Poll a single video task. Returns True if terminal (success/fail)."""
     provider = DataEyesAIVideoProvider()
@@ -92,6 +109,7 @@ async def poll_single_task(task: VideoTask, db: Session) -> bool:
             task.local_path = local_url
             task.status = "succeeded"
             db.commit()
+            _seed_video_to_canvas(task, db)
             return True
 
         elif status in ("failed", "FAILED", "ERROR", "expired", "not_found"):

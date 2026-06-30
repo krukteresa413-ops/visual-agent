@@ -689,7 +689,7 @@ function LovartCanvasToolbar() {
 // ── Main CanvasView ─────────────────────────────────────────────
 
 export default function CanvasView({
-  mainImage, whiteBg, sceneImages, sellingPoints, videoScripts, adMaterial, brief, projectId, isLight, generationTaskId, qualityReport, onAddToChat, onEditPrompt, libraryAddRequest, onLibraryAddConsumed,
+  mainImage, whiteBg, sceneImages, sellingPoints, videoScripts, adMaterial, brief, projectId, isLight, generationTaskId, qualityReport, onAddToChat, onEditPrompt, libraryAddRequest, onLibraryAddConsumed, canvasRefreshNonce,
 }: CanvasViewProps) {
   // Canvas state
   const [elements, setElements] = useState<CanvasElement[]>([]);
@@ -792,6 +792,23 @@ export default function CanvasView({
       setConnections(buildDefaultConnections(els));
     });
   }, [pid, mainImage, whiteBg, sceneImages, sellingPoints, videoScripts, adMaterial]);
+
+  // ── On refresh nonce, re-fetch canvas state and merge new elements (异步出片落画布) ──
+  useEffect(() => {
+    if (!canvasRefreshNonce) return;
+    let cancelled = false;
+    api.atelierCanvas.getState(pid).then(data => {
+      const elems = (data as any)?.elements as any[] | undefined;
+      if (cancelled || !elems || !elems.length) return;
+      setElements(prev => {
+        const ids = new Set(prev.map(e => e.id));
+        const urls = new Set(prev.map(e => e.thumbnail_url).filter(Boolean));
+        const additions = elems.filter(e => !ids.has(e.id) && !urls.has(e.thumbnail_url));
+        return additions.length ? [...prev, ...(additions as CanvasElement[])] : prev;
+      });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [canvasRefreshNonce, pid]);
 
   // ── Load timeline ────────────────────────────────────────────
   useEffect(() => {

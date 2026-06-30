@@ -312,21 +312,24 @@ async def _quick_generate_video_asset(req, brief: dict) -> dict:
 
     model, base_options = _selected_video_model(req)
     base_options.setdefault("resolution", resolution)
+    sel_platform = base_options.get("platform") or "seedance"
 
-    # DataEyesAI 聚合了多家视频厂商,均在同一网关下。跨厂商回退链:某家网关 503/失败
-    # 时自动换下一家,显著提升出片成功率。图生视频(有参考图)统一作为首帧 I2V。
-    # (platform, model) — 各厂商默认模型见 video_generation_service VENDORS
-    video_chain = [
-        ("seedance", model or "doubao-seedance-1-5-pro-251215"),
+    # 用户选定的 (platform, model) 优先;其余作为“提交失败”时的快速回退。
+    # 提交是秒级的,真正出片由后台 video_polling_worker 轮询(异步出片)。
+    _fallback = [
+        ("seedance", "doubao-seedance-1-5-pro-251215"),
         ("kling", "kling-v2-6"),
         ("vidu", "viduq3-pro"),
         ("hailuo", "MiniMax-Hailuo-2.3"),
     ]
+    video_chain = [(sel_platform, model)] + [(p, m) for (p, m) in _fallback if p != sel_platform]
     last_err = None
     for platform, vmodel in video_chain:
         options = dict(base_options)
         options["platform"] = platform
-        if req.reference_image_url:
+        options["submit_only"] = True
+        options["project_id"] = getattr(req, "project_id", None)
+        if getattr(req, "reference_image_url", None):
             options["first_frame_url"] = req.reference_image_url
         try:
             result = await video_generation_service.generate(VideoGenerationRequest(
@@ -336,17 +339,13 @@ async def _quick_generate_video_asset(req, brief: dict) -> dict:
                 model=vmodel,
                 options=options,
             ))
-            if result.videos and result.videos[0].url:
+            if result.videos:
+                v = result.videos[0]
                 return {
-                    "video": {
-                        "url": result.videos[0].url,
-                        "duration": duration,
-                        "task_id": result.videos[0].provider_asset_id or "",
-                        "provider": platform,
-                    },
+                    "video": {"url": v.url, "duration": duration, "task_id": v.provider_asset_id},
                     "modality": "video",
-                    "status": "succeeded",
-                    "message": f"视频已生成(厂商:{platform})",
+                    "status": "submitted",
+                    "message": "视频已提交，排队生成中",
                 }
         except Exception as e:  # noqa: BLE001 — 换下一家厂商
             last_err = e
@@ -996,6 +995,7 @@ class QuickGenerateRequest(BaseModel):
     image_model: str | None = None
     auto_model: bool = True
     brief: dict | None = None
+    agent_mode: str | None = None
 
 
 @router.post("/quick-generate")
@@ -1076,10 +1076,15 @@ async def quick_generate(req: QuickGenerateRequest):
 
     # ── Modal routing: detect video intent ──
     user_prompt = (req.prompt or "").lower()
-    is_video_intent = any(kw in user_prompt for kw in [
-        "视频", "video", "动画", "镜头", "运镜", "短片", "movie", "clip", "footage",
-        "生成一段", "拍摄", "录制",
-    ])
+    if req.agent_mode == "video-gen":
+        is_video_intent = True
+    elif req.agent_mode == "image-gen":
+        is_video_intent = False
+    else:
+        is_video_intent = any(kw in user_prompt for kw in [
+            "视频", "video", "动画", "镜头", "运镜", "短片", "movie", "clip", "footage",
+            "生成一段", "拍摄", "录制",
+        ])
 
     # Spawn background generation (same pattern as generate-async)
     task_id = str(uuid.uuid4())
