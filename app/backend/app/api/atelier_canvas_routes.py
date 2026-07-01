@@ -116,13 +116,10 @@ def get_db():
 # ── Canvas State ──────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/canvas-state", response_model=CanvasStateResponse)
-def get_canvas_state(project_id: int, db: Session = Depends(get_db)):
-    """Load the full canvas state for a project."""
-    state = (
-        db.query(CanvasState)
-        .filter(CanvasState.project_id == project_id)
-        .first()
-    )
+def get_canvas_state(project_id: int, canvas_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    """Load the full canvas state for a project's canvas (canvas_id 缺省=项目默认画布)."""
+    from app.services.canvas_service import get_canvas_state_for
+    _canvas, state = get_canvas_state_for(db, project_id, canvas_id)
 
     if not state:
         return CanvasStateResponse(
@@ -145,14 +142,12 @@ def get_canvas_state(project_id: int, db: Session = Depends(get_db)):
 def put_canvas_state(
     project_id: int,
     payload: CanvasStatePayload,
+    canvas_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Save (create or update) the canvas state for a project."""
-    state = (
-        db.query(CanvasState)
-        .filter(CanvasState.project_id == project_id)
-        .first()
-    )
+    """Save (create or update) the canvas state for a project's canvas (canvas_id 缺省=项目默认画布)."""
+    from app.services.canvas_service import get_canvas_state_for
+    canvas, state = get_canvas_state_for(db, project_id, canvas_id)
 
     elements_json = json.dumps(
         [e.model_dump(exclude_none=True) for e in payload.elements], ensure_ascii=False
@@ -170,6 +165,7 @@ def put_canvas_state(
     else:
         state = CanvasState(
             project_id=project_id,
+            canvas_id=canvas.id,
             elements_json=elements_json,
             connections_json=connections_json,
             viewport_json=viewport_json,

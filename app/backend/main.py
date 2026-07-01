@@ -16,6 +16,7 @@ from app.models.video_task import VideoTask
 from app.models.auth import Tenant, User  # ensure users table mapped before create_all
 from app.models.credit import CreditOrder  # 图四 充值订单
 from app.models.share_link import ShareLink  # Phase S 真·分享(免登录只读快照)
+from app.models.canvas import Canvas  # Phase C 一项目多画布
 from app.api.visual_tasks import router as visual_tasks_router
 from app.api.brief_routes import router as brief_router
 from app.api.project_routes import router as project_router

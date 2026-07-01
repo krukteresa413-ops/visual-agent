@@ -22,6 +22,7 @@ ACTION_LABELS = {
 
 class CanvasImageActionRequest(BaseModel):
     project_id: int = Field(..., ge=1)
+    canvas_id: int | None = None
     asset_id: str = Field(..., min_length=1)
     action: CanvasImageAction
     image_url: str = Field(..., min_length=1)
@@ -30,8 +31,9 @@ class CanvasImageActionRequest(BaseModel):
     model: str | None = None
 
 
-def _load_canvas_elements(db: Session, project_id: int) -> tuple[CanvasState, list[dict]]:
-    state = db.query(CanvasState).filter(CanvasState.project_id == project_id).first()
+def _load_canvas_elements(db: Session, project_id: int, canvas_id: int | None = None) -> tuple[CanvasState, list[dict]]:
+    from app.services.canvas_service import get_canvas_state_for
+    _canvas, state = get_canvas_state_for(db, project_id, canvas_id)
     if not state:
         raise HTTPException(status_code=404, detail="canvas state not found")
     try:
@@ -83,7 +85,7 @@ def _build_action_element(
 
 
 def _append_action_version(db: Session, req: CanvasImageActionRequest, result: dict, instruction: str) -> list[dict]:
-    state, elements = _load_canvas_elements(db, req.project_id)
+    state, elements = _load_canvas_elements(db, req.project_id, req.canvas_id)
     parent = next((el for el in elements if el.get("id") == req.asset_id), None)
     if not parent:
         raise HTTPException(status_code=404, detail="selected asset not found")

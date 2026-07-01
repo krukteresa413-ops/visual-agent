@@ -21,6 +21,10 @@ class ChatConversation(Base):
     project_id = Column(
         Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Phase C: 对话归属画布。canvas_id 为权威键;C.1 加法期可空(已回填),C.2 再收紧
+    canvas_id = Column(
+        Integer, ForeignKey("canvases.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     # JSON 数组字符串: [{id, role, step, content, status, percent, assets}, ...]
     messages = Column(Text, nullable=False, default="[]")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

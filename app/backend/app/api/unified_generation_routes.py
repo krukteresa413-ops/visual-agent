@@ -214,24 +214,22 @@ def _canvas_elements_from_asset_plan(project_id: int, asset_plan: dict) -> list[
     return elements
 
 
-def _ensure_canvas_image_elements(db, project_id: int, asset_plan: dict) -> None:
-    """Seed canvas-state with rendered assets so new projects are non-empty."""
+def _ensure_canvas_image_elements(db, project_id: int, asset_plan: dict, canvas_id: int | None = None) -> None:
+    """Seed canvas-state with rendered assets so new projects are non-empty.
+
+    Phase C: 落到 (project, canvas) 解析出的画布;canvas_id 缺省=项目默认画布(自愈遗留行)。
+    """
     from datetime import datetime
-    from app.models.canvas_state import CanvasState
+    from app.services.canvas_service import get_canvas_state_for
 
     generated_elements = _canvas_elements_from_asset_plan(project_id, asset_plan)
     if not generated_elements:
         return
 
-    state = db.query(CanvasState).filter(CanvasState.project_id == project_id).first()
-    if state:
-        try:
-            elements = _json.loads(state.elements_json or "[]")
-        except Exception:
-            elements = []
-    else:
-        state = CanvasState(project_id=project_id, elements_json="[]", connections_json="[]", viewport_json='{"x":0,"y":0,"scale":1}')
-        db.add(state)
+    _canvas, state = get_canvas_state_for(db, project_id, canvas_id, create_defaults=True)
+    try:
+        elements = _json.loads(state.elements_json or "[]")
+    except Exception:
         elements = []
 
     existing_keys = {

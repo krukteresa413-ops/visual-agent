@@ -41,6 +41,7 @@ class ModifyRequest(BaseModel):
     operation: str = "text"
     crop_region: Optional[CropRegion] = None
     project_id: Optional[int] = None
+    canvas_id: Optional[int] = None
     asset_id: Optional[str] = None
     provider: str = "dataeyes"
     model: Optional[str] = None
@@ -54,8 +55,10 @@ def _append_canvas_version(
     modified: dict,
     asset_type: str,
     instruction: str,
+    canvas_id: Optional[int] = None,
 ) -> dict:
-    state = db.query(CanvasState).filter(CanvasState.project_id == project_id).first()
+    from app.services.canvas_service import get_canvas_state_for
+    _canvas, state = get_canvas_state_for(db, project_id, canvas_id)
     if not state:
         raise HTTPException(status_code=404, detail="canvas state not found")
 
@@ -162,6 +165,7 @@ async def modify_asset(req: ModifyRequest, db: Session = Depends(get_db)):
             modified=modified,
             asset_type=req.asset_type,
             instruction=req.instruction,
+            canvas_id=req.canvas_id,
         )
         return {"modified": modified, "canvas_element": canvas_element}
 

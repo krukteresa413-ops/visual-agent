@@ -34,10 +34,12 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     reference_image_url: Optional[str] = None
     project_id: Optional[int] = None
+    canvas_id: Optional[int] = None
 
 
 class SaveHistoryRequest(BaseModel):
     project_id: int
+    canvas_id: Optional[int] = None
     messages: List[Any] = Field(default_factory=list)
 
 
@@ -46,8 +48,8 @@ def _sse(payload: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
-def _seed_canvas_image(project_id, image_url, label="Main Image"):
-    """把一张生成图写进该 project 的画布；任何失败都不得打断对话流。"""
+def _seed_canvas_image(project_id, image_url, label="Main Image", canvas_id=None):
+    """把一张生成图写进该 (project, canvas) 的画布；任何失败都不得打断对话流。"""
     if not project_id or not image_url:
         return
     try:
@@ -58,6 +60,7 @@ def _seed_canvas_image(project_id, image_url, label="Main Image"):
             _ensure_canvas_image_elements(
                 db, int(project_id),
                 {"main_image": {"url": image_url, "goal": label}},
+                canvas_id=canvas_id,
             )
         finally:
             db.close()
@@ -65,7 +68,7 @@ def _seed_canvas_image(project_id, image_url, label="Main Image"):
         logger.exception("canvas seed failed (non-fatal)")
 
 
-async def chat_event_stream(message: str, reference_image_url: Optional[str], project_id=None):
+async def chat_event_stream(message: str, reference_image_url: Optional[str], project_id=None, canvas_id=None):
     """可独立测试的事件生成器：把 run_turn 的结果转成自描述 SSE 事件。"""
     yield _sse({"type": "progress", "status": "thinking", "message": "正在处理…"})
     try:
@@ -75,7 +78,7 @@ async def chat_event_stream(message: str, reference_image_url: Optional[str], pr
         yield _sse({"type": "error", "status": "error", "message": str(exc)})
         return
     for url in result.get("assets", []):
-        _seed_canvas_image(project_id, url)
+        _seed_canvas_image(project_id, url, canvas_id=canvas_id)
         yield _sse({"type": "progress", "status": "generating", "detail": {"url": url}})
     yield _sse({"type": "progress", "status": "generating", "message": result.get("reply", "")})
     yield _sse({"type": "done", "status": "done"})
@@ -85,7 +88,7 @@ async def chat_event_stream(message: str, reference_image_url: Optional[str], pr
 async def chat(req: ChatRequest):
     """POST /api/v1/chat —— 流式返回 Agent 一轮对话的事件。"""
     return StreamingResponse(
-        chat_event_stream(req.message, req.reference_image_url, req.project_id),
+        chat_event_stream(req.message, req.reference_image_url, req.project_id, req.canvas_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -102,17 +105,12 @@ async def chat(req: ChatRequest):
 @router.get("/history")
 def get_chat_history(
     project_id: int = Query(...),
+    canvas_id: Optional[int] = Query(None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    conv = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.project_id == project_id,
-            ChatConversation.tenant_id == current_user.tenant_id,
-        )
-        .first()
-    )
+    from app.services.canvas_service import get_chat_conversation_for
+    _canvas, conv = get_chat_conversation_for(db, project_id, current_user.tenant_id, canvas_id)
     if not conv:
         return {"messages": []}
     try:
@@ -127,21 +125,11 @@ def save_chat_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    from app.services.canvas_service import get_chat_conversation_for
     payload = json.dumps(req.messages, ensure_ascii=False)
-    conv = (
-        db.query(ChatConversation)
-        .filter(
-            ChatConversation.project_id == req.project_id,
-            ChatConversation.tenant_id == current_user.tenant_id,
-        )
-        .first()
+    _canvas, conv = get_chat_conversation_for(
+        db, req.project_id, current_user.tenant_id, req.canvas_id, create=True
     )
-    if conv:
-        conv.messages = payload
-    else:
-        conv = ChatConversation(
-            tenant_id=current_user.tenant_id, project_id=req.project_id, messages=payload
-        )
-        db.add(conv)
+    conv.messages = payload
     db.commit()
     return {"ok": True, "count": len(req.messages)}
