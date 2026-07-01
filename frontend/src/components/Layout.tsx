@@ -5,8 +5,10 @@
  * Colors reuse the existing dark shell; the global nav stays hidden inside the canvas workspace.
  */
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ThemeToggle, { useTheme } from './ThemeToggle';
+import { api, getToken } from '../api/client';
 
 const NAV = [
   { to: '/', label: '首页' },
@@ -21,8 +23,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { isLight, toggle } = useTheme();
-  // Mock 数据(暂无后端积分/头像接口):随机一次,保持本次会话稳定
-  const [credits] = useState(() => 800 + Math.floor(Math.random() * 4200));
+  // 积分余额: 接真实后端 api.credits.balance()(与编辑页顶栏 A 同源同 queryKey); 未登录不取, 取不到显 '—'
+  const { data: creditsData } = useQuery({ queryKey: ['credits', 'balance'], queryFn: () => api.credits.balance(), enabled: !!getToken() });
+  const credits = creditsData?.credits ?? null;
+  // 头像仍为占位(暂无头像接口): 随机一次保持本次会话稳定
   const [avatar] = useState(() => {
     const letters = ['M', 'A', 'Y', 'G', 'Z', 'L', 'K'];
     const grads = [
@@ -106,14 +110,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               新建项目
             </button>
 
-            {/* Credits (no backend credits API yet — placeholder) */}
-            <div className="hidden lg:flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white/5 border border-white/10 text-gray-300">
+            {/* Credits — 真实余额(api.credits.balance, 与编辑页顶栏同源) */}
+            <Link to="/profile" title="积分余额 · 点击查看/充值" className="hidden lg:flex items-center gap-1.5 h-9 px-3 rounded-lg bg-white/5 border border-white/10 text-gray-300 transition-colors hover:bg-white/10">
               <svg viewBox="0 0 24 24" className="size-4 text-orange-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="8" />
                 <path d="M12 8v8M9.5 10.5h3a1.5 1.5 0 0 1 0 3h-3" />
               </svg>
-              <span className="text-sm font-semibold tabular-nums">{credits.toLocaleString()}</span>
-            </div>
+              <span className="text-sm font-semibold tabular-nums">{credits === null ? '—' : credits.toLocaleString()}</span>
+            </Link>
 
             {/* Theme toggle (reuse existing component — contract) */}
             <ThemeToggle isLight={isLight} toggle={toggle} />
