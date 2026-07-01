@@ -9,7 +9,7 @@
 import json
 import logging
 import uuid
-from typing import Optional
+from typing import Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -17,10 +17,11 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.auth import User
-from app.models.canvas_state import CanvasState
+from app.models.canvas import Canvas
 from app.models.project import Project
 from app.models.share_link import ShareLink
 from app.services.auth_service import get_current_user
+from app.services.canvas_service import assert_generation_access, get_canvas_state_for
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ _DEFAULT_VIEWPORT = {"x": 0, "y": 0, "scale": 1}
 
 class CreateShareRequest(BaseModel):
     project_id: int
+    # Phase C ③: 分享按 canvas —— 冻结指定画布快照; 缺省回退项目默认画布(向后兼容旧前端)
+    canvas_id: Optional[int] = None
     title: Optional[str] = None
 
 
@@ -41,16 +44,20 @@ def _loads(raw, default):
         return default
 
 
-def _load_canvas_snapshot(db: Session, project_id: int) -> dict:
-    """读取该 project 的画布状态并冻结为 {elements, connections, viewport}。"""
-    cs = (
-        db.query(CanvasState)
-        .filter(CanvasState.project_id == project_id)
-        .first()
-    )
+def _load_canvas_snapshot(
+    db: Session, project_id: int, canvas_id: Optional[int] = None
+) -> Tuple[Canvas, dict]:
+    """解析目标画布(传 canvas_id 用之, 否则项目默认画布), 冻结其状态为
+    {elements, connections, viewport}。返回 (canvas, snapshot)。
+
+    Phase C 前是按 project_id 取唯一 CanvasState; C.2 后 project_id 不再唯一
+    (一项目 N 张画布 = N 行 state), 必须经 canvas_service 中枢按具体 canvas 取,
+    否则 .first() 会冻结到任意/默认画布(在非默认画布上分享 → 冻错画布)。
+    """
+    canvas, cs = get_canvas_state_for(db, project_id, canvas_id)
     if not cs:
-        return {"elements": [], "connections": [], "viewport": dict(_DEFAULT_VIEWPORT)}
-    return {
+        return canvas, {"elements": [], "connections": [], "viewport": dict(_DEFAULT_VIEWPORT)}
+    return canvas, {
         "elements": _loads(cs.elements_json, []),
         "connections": _loads(cs.connections_json, []),
         "viewport": _loads(cs.viewport_json, dict(_DEFAULT_VIEWPORT)),
@@ -63,19 +70,17 @@ def create_share(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
+    # 租户守卫 + canvas 归属校验(复用 Phase C ② 安全 pass 的统一守卫):
+    # 项目须属当前租户; 传了 canvas_id 则该 canvas 须属当前租户且属于该 project
+    # (跨项目/跨租户 canvas_id → 404/403, 不再静默回退到默认画布)。
+    assert_generation_access(db, req.project_id, current_user, req.canvas_id)
     project = db.query(Project).filter(Project.id == req.project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="project not found")
-    # 租户守卫: 只能分享本公司(tenant)的项目
-    if (
-        project.tenant_id is not None
-        and current_user.tenant_id is not None
-        and project.tenant_id != current_user.tenant_id
-    ):
-        raise HTTPException(status_code=403, detail="forbidden")
 
-    canvas = _load_canvas_snapshot(db, req.project_id)
-    snapshot = {"canvas": canvas, "meta": {"project_name": project.name}}
+    canvas, canvas_snapshot = _load_canvas_snapshot(db, req.project_id, req.canvas_id)
+    snapshot = {
+        "canvas": canvas_snapshot,
+        "meta": {"project_name": project.name, "canvas_name": canvas.name},
+    }
     token = uuid.uuid4().hex
     link = ShareLink(
         token=token,
@@ -88,7 +93,7 @@ def create_share(
     )
     db.add(link)
     db.commit()
-    element_count = len(canvas.get("elements") or [])
+    element_count = len(canvas_snapshot.get("elements") or [])
     return {"token": token, "title": link.title, "element_count": element_count}
 
 

@@ -237,8 +237,8 @@ export const api = {
 
   // 真·分享 (Phase S: 冻结快照 + 免登录只读 token 链接)
   share: {
-    create: (projectId: number, title?: string) =>
-      client.post<{ token: string; title: string; element_count: number }>('/share', { project_id: projectId, title }).then(r => r.data),
+    create: (projectId: number, title?: string, canvasId?: number) =>
+      client.post<{ token: string; title: string; element_count: number }>('/share', { project_id: projectId, title, canvas_id: canvasId ?? null }).then(r => r.data),
     get: (token: string) =>
       client.get<{ title: string; created_at: string | null; canvas: { elements: unknown[]; connections: unknown[]; viewport: { x: number; y: number; scale: number } }; meta: Record<string, unknown> }>(`/share/${token}`).then(r => r.data),
   },

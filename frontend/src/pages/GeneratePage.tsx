@@ -187,7 +187,7 @@ export default function GeneratePage() {
     setChatMenuOpen(false);
     setShareBusy(true);
     try {
-      const { token } = await api.share.create(pid, brief.product_name?.trim() || undefined);
+      const { token } = await api.share.create(pid, brief.product_name?.trim() || undefined, canvasId);   // Phase C ③: 分享当前画布(非默认画布也冻结正确)
       const url = `${window.location.origin}/share/${token}`;
       setShareUrl(url);
       try { await navigator.clipboard.writeText(url); toast('公开只读链接已生成并复制', 'success'); }
