@@ -75,6 +75,9 @@ export default function GeneratePage() {
   const navigate = useNavigate();
   const { data: creditsData } = useQuery({ queryKey: ['credits', 'balance'], queryFn: () => api.credits.balance() });
   const credits = creditsData?.credits ?? null;
+  // Phase P: 项目切换器 — 全量项目列表(复用 api.projects.list),顶栏下拉切换
+  const { data: projects } = useQuery({ queryKey: ['projects', 'list'], queryFn: () => api.projects.list() });
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [chatMenuOpen, setChatMenuOpen] = useState(false);   // 「新建对话」旁的 ⌄ 下拉
   const [chatKey, setChatKey] = useState(0);                 // 递增以 remount AIChatPanel = 重置对话
   const [lastRightPanel, setLastRightPanel] = useState<'chat' | 'library'>('chat'); // 收起前记住,展开时恢复
@@ -366,6 +369,10 @@ export default function GeneratePage() {
     triggerOff:  isLight ? 'border-gray-200 bg-white/90 text-gray-700 hover:bg-white' : 'border-white/10 bg-gray-800/90 text-gray-300 hover:bg-gray-700',
   };
 
+  // Phase P: 当前项目名(优先项目列表里的 name,回退 brief 产品名)
+  const currentProject = (projects ?? []).find((p) => p.id === pid);
+  const currentProjectName = currentProject?.name?.trim() || brief.product_name?.trim() || '当前项目';
+
   return (
     <div className="liquid-page min-h-screen">
       {/* 分享弹窗:公开只读快照链接(Phase S) */}
@@ -399,6 +406,45 @@ export default function GeneratePage() {
             返回
           </a>
           <a href="/video-edit" className="text-xs px-3 py-1 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors border border-purple-500/20">🎬 视频编辑</a>
+          {/* Phase P: 项目切换器 — 当前项目名 + 下拉切换(整页跳转以干净重载,避免 briefLoaded ref 残留旧项目) */}
+          <div className="relative">
+            <button
+              onClick={() => setProjectMenuOpen((o) => !o)}
+              title="切换项目"
+              className="inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 text-gray-200 transition-colors hover:bg-white/10"
+            >
+              <svg viewBox="0 0 24 24" className="size-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+              <span className="truncate text-sm font-medium">{currentProjectName}</span>
+              <svg viewBox="0 0 24 24" className={`size-3.5 shrink-0 text-gray-400 transition-transform ${projectMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+            {projectMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-[55]" onClick={() => setProjectMenuOpen(false)} />
+                <div className={`absolute left-0 top-full z-[60] mt-1.5 max-h-[70vh] w-64 overflow-auto rounded-xl border py-1.5 shadow-2xl ${panel.menu}`}>
+                  <div className={`px-3 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>切换项目</div>
+                  {(projects ?? []).length === 0 && (
+                    <div className={`px-3 py-2 text-xs ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>暂无其它项目</div>
+                  )}
+                  {(projects ?? []).map((p) => (
+                    p.id === pid ? (
+                      <div key={p.id} className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${isLight ? 'bg-purple-50 text-purple-700' : 'bg-purple-500/15 text-purple-200'}`}>
+                        <span className="truncate font-medium">{p.name?.trim() || '未命名项目'}</span>
+                        <svg viewBox="0 0 24 24" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                      </div>
+                    ) : (
+                      <a key={p.id} href={`/generate/${p.id}`} className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${panel.menuItem}`}>
+                        <span className="truncate">{p.name?.trim() || '未命名项目'}</span>
+                        {p.generation_count > 0 && <span className={`shrink-0 text-[11px] ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>{p.generation_count} 次</span>}
+                      </a>
+                    )
+                  ))}
+                  <div className={`my-1 border-t ${panel.headBorder}`} />
+                  <a href="/new" className={`flex items-center gap-2 px-3 py-2 text-sm ${panel.menuItem}`}><span className="text-base leading-none">＋</span>新建项目</a>
+                  <a href="/projects" className={`flex items-center gap-2 px-3 py-2 text-sm ${panel.menuItem}`}><span className="text-base leading-none">🗂</span>全部项目</a>
+                </div>
+              </>
+            )}
+          </div>
           {!isFullCanvas && <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-lg object-contain" />}
           {!isFullCanvas && <span className="font-semibold text-lg text-white tracking-tight">视觉 Agent</span>}
         </div>
