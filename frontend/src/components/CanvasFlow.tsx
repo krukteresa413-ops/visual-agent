@@ -34,7 +34,8 @@ import FreedrawLayer from './canvas/FreedrawLayer';
 import DragCreateLayer from './canvas/DragCreateLayer';
 import { getStroke, getSvgPathFromStroke, strokeOptions } from '../canvas/freehand';
 import ImageActionBar from './canvas/ImageActionBar';
-import CanvasToolbar from './canvas/CanvasToolbar';
+import CanvasToolbarDock from './canvas/CanvasToolbarDock';
+import GeneratorComposer, { type GenerateParams } from './canvas/GeneratorComposer';
 import HelperLinesOverlay from './canvas/HelperLinesOverlay';
 import CanvasPropertyPanel, { type PropertyPanelKind } from './canvas/CanvasPropertyPanel';
 import EditableRelationEdge from './canvas/EditableRelationEdge';
@@ -128,6 +129,9 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   const [reeditText, setReeditText] = useState('');
   const [reeditBusy, setReeditBusy] = useState(false);
   const [canvasNotice, setCanvasNotice] = useState<{ kind: 'info' | 'warn'; text: string } | null>(null);
+  // AI 图/视频「撰写浮窗」:{kind} 为打开、null 为关闭(替代原先往画布丢生成节点);genBusy=生成中(令顶部进度提示不自动消失)。
+  const [genComposer, setGenComposer] = useState<{ kind: 'image' | 'video' } | null>(null);
+  const [genBusy, setGenBusy] = useState(false);
   const { getNodes, getEdges, getViewport, screenToFlowPosition, fitView } = useReactFlow();
   // 对齐吸附:拖拽中显示的参考线(绝对流坐标);拖拽结束清空。
   const [helperLines, setHelperLines] = useState<{ vertical?: number; horizontal?: number }>({});
@@ -593,10 +597,10 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
 
   // 提示自动消失(进行中的不消失,直到被结果替换)
   useEffect(() => {
-    if (!canvasNotice || reeditBusy) return;
+    if (!canvasNotice || reeditBusy || genBusy) return;
     const t = window.setTimeout(() => setCanvasNotice(null), 6000);
     return () => window.clearTimeout(t);
-  }, [canvasNotice, reeditBusy]);
+  }, [canvasNotice, reeditBusy, genBusy]);
 
   const [imgActionBusy, setImgActionBusy] = useState<string | null>(null);
   const handleImageAction = useCallback(async (id: string) => {
@@ -702,67 +706,63 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     } catch { setCanvasNotice({ kind: 'warn', text: '上传失败,请重试' }); }
   };
 
-  // Phase A:画布内「AI 图/视频生成节点」的生成动作(由节点通过 data.onGenerate 调用)。
-  // 复用已验证的 quickGenerate → 轮询 getState diff 管线;拿到后端新元素后,把该「生成节点」
-  // 就地替换成标准图片/视频节点(沿用后端真实 id/asset_ref,从而继承下载/抠图/二次编辑/关系线);
-  // saveCanvas 是整张画布的权威覆盖写,因此后端临时落下的同一元素不会重复。
-  const onGeneratorRun = useCallback(async (
-    nodeId: string,
-    params: { prompt: string; reference_image_url?: string; width: number; height: number; ratio: string; brief: Record<string, unknown> },
-  ) => {
-    const startNode = getNodes().find((n) => n.id === nodeId);
-    if (!startNode) return;
-    const kind = (startNode.data as { kind?: string })?.kind === 'video' ? 'video' : 'image';
+  // AI 图/视频「撰写浮窗」的生成动作:点浮窗「生成」才调用。复用已验证的 quickGenerate → 轮询 getState diff 管线;
+  // 拿到后端新元素后,把结果落到「当前视口中心」(而非屏幕外),沿用后端真实 id/asset_ref(继承下载/抠图/二次编辑/关系线)。
+  // saveCanvas 是整张画布的权威覆盖写,故后端临时落下的同一元素不会重复。
+  const runGenComposer = useCallback(async (kind: 'image' | 'video', params: GenerateParams) => {
+    setGenComposer(null); // 撰写完即关浮窗让位,进度走顶部提示
+    const isVideo = kind === 'video';
     const prompt = params.prompt.trim();
     if (!prompt) return;
-
-    setNodes((cur) => cur.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, status: 'generating' as const, error: undefined } } : n)));
+    setGenBusy(true);
+    setCanvasNotice({ kind: 'info', text: isVideo ? '正在生成视频(约 1-2 分钟),完成后自动加入画布…' : '正在生成图片…' });
     const before = new Set(getNodes().map((n) => String((n.data as { legacy_id?: string })?.legacy_id || n.id)));
-    const fail = (text: string) => setNodes((cur) => cur.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, status: 'error' as const, error: text } } : n)));
-
+    // 落点 = 当前视口中心(结果出现在用户正看的地方,而非按节点数排到屏幕外)
+    const stageEl = document.querySelector('[data-flow-canvas-stage]') as HTMLElement | null;
+    const rect = stageEl?.getBoundingClientRect();
+    const center = rect
+      ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+      : { x: 200, y: 200 };
+    const px = center.x - params.width / 2;
+    const py = center.y - params.height / 2;
     try {
       await api.generation.quickGenerate({
         prompt,
         project_id: projectId,
-        agent_mode: kind === 'video' ? 'video-gen' : 'image-gen',
+        agent_mode: isVideo ? 'video-gen' : 'image-gen',
         auto_model: true,
         brief: params.brief,
         ...(params.reference_image_url ? { reference_image_url: params.reference_image_url } : {}),
       });
-      const rounds = kind === 'video' ? 25 : 16;
+      const rounds = isVideo ? 25 : 16;
       for (let i = 0; i < rounds; i += 1) {
-        await new Promise((r) => window.setTimeout(r, kind === 'video' ? 6000 : 3000));
+        await new Promise((r) => window.setTimeout(r, isVideo ? 6000 : 3000));
         const data = await api.atelierCanvas.getState(projectId);
         const fresh = (data?.elements || []).filter((el: { id: string }) => !before.has(String(el.id)));
         if (!fresh.length) continue;
-        const gen = getNodes().find((n) => n.id === nodeId);
-        const px = gen ? gen.position.x : startNode.position.x;
-        const py = gen ? gen.position.y : startNode.position.y;
         const [first, ...rest] = fresh;
         const positioned = { ...first, x: px, y: py, width: params.width, height: params.height };
-        let next = (getNodes() as typeof nodes).filter((n) => n.id !== nodeId);
-        next = upsertFlowCanvasNode(next, positioned as never) as typeof nodes;
+        let next = upsertFlowCanvasNode(getNodes() as typeof nodes, positioned as never) as typeof nodes;
         rest.forEach((extra: { id: string }, idx: number) => {
           next = upsertFlowCanvasNode(next, { ...extra, x: px + (params.width + 40) * (idx + 1), y: py } as never) as typeof nodes;
         });
         commit({ nodes: next });
+        setCanvasNotice({ kind: 'info', text: isVideo ? '新视频已生成并加入画布' : '已生成图片并加入画布' });
         return;
       }
-      fail(kind === 'video' ? '视频仍在渲染,请稍后重试或刷新画布' : '生成超时,图像服务可能繁忙,请稍后重试');
+      setCanvasNotice({ kind: 'warn', text: isVideo ? '视频仍在渲染,稍后会自动出现;也可手动刷新查看' : '生成超时,图像服务可能繁忙,请稍后重试' });
     } catch {
-      fail(kind === 'video' ? '视频生成失败,请稍后重试' : '生成失败,请稍后重试');
+      setCanvasNotice({ kind: 'warn', text: isVideo ? '视频生成失败,请稍后重试' : '生成失败,请稍后重试' });
+    } finally {
+      setGenBusy(false);
     }
-  }, [getNodes, projectId, setNodes, commit]);
+  }, [getNodes, projectId, commit, screenToFlowPosition]);
 
-  const dropGenerator = (kind: 'image' | 'video') => {
-    const pos = nextNodePos();
-    const width = kind === 'video' ? 360 : 300;
-    const height = kind === 'video' ? 203 : 300;
-    const id = `gen_${kind}_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-    const node = { id, type: 'generator', position: pos, width, data: { kind, status: 'idle', width, height, onGenerate: onGeneratorRun } };
-    setNodes((cur) => [...cur, node as never]);
-    setCanvasNotice({ kind: 'info', text: kind === 'video' ? '已添加视频生成器,填入描述后点「生成」' : '已添加图片生成器,填入描述后点「生成」' });
-  };
+  // 点工具栏 AI图/AI视频 → 打开撰写浮窗(不再往画布丢常驻生成节点);关闭即零落地。
+  const openGenComposer = useCallback((kind: 'image' | 'video') => {
+    setPendingTool(null);
+    setGenComposer({ kind });
+  }, []);
 
   // 工具栏动作分发(action id 由 CanvasToolbar 的下拉/按钮给出)
   const handleTool = (action: string) => {
@@ -770,8 +770,8 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     if (action === 'move') { setPendingTool(null); setToolMode('move'); return; }
     if (action === 'upload-image') { setPendingTool(null); toolFileRef.current?.click(); return; }
     if (action === 'upload-video') { setCanvasNotice({ kind: 'info', text: '上传视频即将上线' }); return; }
-    if (action === 'ai-image') { setPendingTool(null); dropGenerator('image'); return; }
-    if (action === 'ai-video') { setPendingTool(null); dropGenerator('video'); return; }
+    if (action === 'ai-image') { openGenComposer('image'); return; }
+    if (action === 'ai-video') { openGenComposer('video'); return; }
     // 画笔:进入持续绘制模式(覆盖层),双击/换工具退出;模式与颜色/笔宽由属性面板呈现
     if (action === 'pen') { setPendingTool('pen'); return; }
     // 标记:点状批注,点击放置;文字/画板/图形:拖拽创建(覆盖层有自带提示,不再弹 toast)
@@ -1078,10 +1078,17 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
                 </button>
               </div>
             </Panel>
-            <Panel position="bottom-center">
-              <CanvasToolbar onTool={handleTool} />
-            </Panel>
           </ReactFlow>
+          {/* 可自由拖动的底栏:渲染在 stage 覆盖层,不再用 React Flow Panel 固定居中(位置存 localStorage) */}
+          <CanvasToolbarDock onTool={handleTool} />
+          {/* AI 图/视频撰写浮窗:点「生成」才生成并落到视口中心,关闭即零落地 */}
+          {genComposer && (
+            <GeneratorComposer
+              kind={genComposer.kind}
+              onGenerate={(params) => { void runGenComposer(genComposer.kind, params); }}
+              onClose={() => setGenComposer(null)}
+            />
+          )}
           {pendingTool === 'pen' && (
             <FreedrawLayer color={penColor} size={penSize} onComplete={onFreedrawComplete} onExit={() => setPendingTool(null)} />
           )}
