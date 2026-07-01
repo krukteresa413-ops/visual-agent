@@ -42,7 +42,11 @@ def get_or_create_default_canvas(db: Session, project_id: int, tenant_id: Option
 def resolve_canvas(db: Session, project_id: int, canvas_id: Optional[int] = None) -> Canvas:
     if canvas_id:
         canvas = db.query(Canvas).filter(Canvas.id == canvas_id).first()
-        if canvas is not None:
+        # 只认属于本 project 的 canvas;跨项目/失效的 canvas_id 一律回退项目默认画布。
+        # 防止无鉴权生成端点(quick-generate 等,Step 3b 起吃 canvas_id)借 canvas_id
+        # 把产物写到他项目/他租户画布;鉴权端点(canvas-state/chat)已在上游
+        # assert_canvas_access 校验归属,匹配时此处行为不变。完整鉴权仍归 Phase C ② 安全 pass。
+        if canvas is not None and canvas.project_id == project_id:
             return canvas
     return get_or_create_default_canvas(db, project_id)
 

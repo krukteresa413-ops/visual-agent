@@ -58,7 +58,7 @@ def _seed_video_to_canvas(task: VideoTask, db: Session) -> None:
                 "duration": task.duration,
                 "task_id": task.provider_task_id,
             }
-        })
+        }, canvas_id=task.canvas_id)   # Phase C Step3b: 落回发起时的画布
     except Exception:
         pass
 

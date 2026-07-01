@@ -259,6 +259,7 @@ export default function GeneratePage() {
       const formData = new FormData();
       formData.append('parsed_brief_json', JSON.stringify(brief));
       formData.append('project_id', String(pid));
+      if (canvasId != null) formData.append('canvas_id', String(canvasId));   // Phase C Step3b: 落回当前画布
       formData.append('skip_review', 'true');
       if (promptTemplate) {
         formData.append('prompt_template', promptTemplate);
@@ -309,6 +310,7 @@ export default function GeneratePage() {
       const { task_id } = await api.generation.quickGenerate({
         prompt: quickPrompt,
         project_id: pid,
+        canvas_id: canvasId,   // Phase C Step3b: 落回当前画布
         prompt_template: promptTemplate || undefined,
         brief: quickBrief || undefined,
         reference_image_url: refImage?.url || undefined,  // Day 3.3
@@ -357,6 +359,7 @@ export default function GeneratePage() {
       const { task_id } = await api.generation.orchestrate({
         prompt: quickPrompt,
         project_id: pid,
+        canvas_id: canvasId,   // Phase C Step3b: 落回当前画布
         brief: quickBrief || undefined,
       });
       setGenTaskId(task_id);

@@ -550,7 +550,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       setCanvasNotice({ kind: 'info', text: '正在按新指令重新生成视频(约 1-2 分钟),完成后自动加入画布…' });
       try {
         const before = new Set(getNodes().map((n) => String((n.data as { legacy_id?: string })?.legacy_id || n.id)));
-        await api.generation.quickGenerate({ prompt: instruction.trim(), project_id: projectId, agent_mode: 'video-gen' });
+        await api.generation.quickGenerate({ prompt: instruction.trim(), project_id: projectId, canvas_id: canvasId, agent_mode: 'video-gen' });
         let landed = false;
         for (let i = 0; i < 20; i += 1) {
           await new Promise((r) => window.setTimeout(r, 6000));
@@ -715,6 +715,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       try {
         await api.canvasImageActions.run({
           project_id: projectId,
+          canvas_id: canvasId,
           asset_id: String(node.data?.legacy_id || node.id),
           action: 'cutout',
           image_url: url,
@@ -826,6 +827,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       await api.generation.quickGenerate({
         prompt,
         project_id: projectId,
+        canvas_id: canvasId,
         agent_mode: isVideo ? 'video-gen' : 'image-gen',
         auto_model: true,
         brief: params.brief,

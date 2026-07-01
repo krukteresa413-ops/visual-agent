@@ -327,6 +327,7 @@ async def _quick_generate_video_asset(req, brief: dict) -> dict:
         options["platform"] = platform
         options["submit_only"] = True
         options["project_id"] = getattr(req, "project_id", None)
+        options["canvas_id"] = getattr(req, "canvas_id", None)   # Phase C Step3b: 视频落回发起画布
         if getattr(req, "reference_image_url", None):
             options["first_frame_url"] = req.reference_image_url
         try:
@@ -466,6 +467,7 @@ async def generate_from_document(
     text: str | None = Form(None),
     parsed_brief_json: str | None = Form(None),
     project_id: int = Form(2),
+    canvas_id: int | None = Form(None),   # Phase C Step3b: 生成落回当前画布(缺省=默认)
     platform_id: str | None = Form(None),
     skip_review: bool = Form(False),
     strategy_first: bool = Form(False),
@@ -644,7 +646,7 @@ async def generate_from_document(
         asset_plan = result.model_dump()
         save_asset_plan(db=db, project_id=project_id, asset_plan=asset_plan,
                         model_used=_history_model_used(asset_plan, getattr(agent._llm, '_model', 'unknown')), generation_seconds=int(elapsed))
-        _ensure_canvas_image_elements(db, project_id, asset_plan)
+        _ensure_canvas_image_elements(db, project_id, asset_plan, canvas_id=canvas_id)
         db.close()
     except Exception:
         pass
@@ -758,6 +760,7 @@ async def generate_async(
     text: str | None = Form(None),
     parsed_brief_json: str | None = Form(None),
     project_id: int = Form(2),
+    canvas_id: int | None = Form(None),   # Phase C Step3b: 生成落回当前画布(缺省=默认)
     platform_id: str | None = Form(None),
     skip_review: bool = Form(False),
     answers: str | None = Form(None),
@@ -835,7 +838,7 @@ async def generate_async(
                 db = SessionLocal()
                 save_asset_plan(db=db, project_id=project_id, asset_plan=gen_result,
                                 model_used=_history_model_used(gen_result, getattr(agent._llm, '_model', 'unknown')), generation_seconds=elapsed)
-                _ensure_canvas_image_elements(db, project_id, gen_result)
+                _ensure_canvas_image_elements(db, project_id, gen_result, canvas_id=canvas_id)
                 db.close()
             except Exception:
                 pass
@@ -987,6 +990,7 @@ def get_history_detail(project_id: int, record_id: int):
 class QuickGenerateRequest(BaseModel):
     prompt: str
     project_id: int = 2
+    canvas_id: int | None = None
     prompt_template: str | None = None
     reference_image_url: str | None = None  # Day 3.3: reference image for style matching
     image_provider: str | None = "dataeyes"
@@ -1108,7 +1112,7 @@ async def quick_generate(req: QuickGenerateRequest):
                 db = SessionLocal()
                 save_asset_plan(db=db, project_id=req.project_id, asset_plan=gen_result,
                                 model_used=_history_model_used(gen_result, getattr(agent._llm, '_model', 'unknown')), generation_seconds=elapsed)
-                _ensure_canvas_image_elements(db, req.project_id, gen_result)
+                _ensure_canvas_image_elements(db, req.project_id, gen_result, canvas_id=req.canvas_id)
                 db.close()
             except Exception:
                 pass
@@ -1131,6 +1135,7 @@ async def quick_generate(req: QuickGenerateRequest):
 class OrchestrateRequest(BaseModel):
     prompt: str | None = None
     project_id: int = 2
+    canvas_id: int | None = None
     brief: dict | None = None
     platforms: list[str] | None = None
 
@@ -1188,7 +1193,7 @@ async def generate_orchestrate(req: OrchestrateRequest):
                     model_used=(gen_result.get("main_image") or {}).get("model") or "orchestrator",
                     generation_seconds=elapsed,
                 )
-                _ensure_canvas_image_elements(db, req.project_id, gen_result)
+                _ensure_canvas_image_elements(db, req.project_id, gen_result, canvas_id=req.canvas_id)
                 db.close()
             except Exception:
                 pass

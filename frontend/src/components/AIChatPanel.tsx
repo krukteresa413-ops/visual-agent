@@ -309,6 +309,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
       const task = await api.generation.quickGenerate({
         prompt: promptWithContext,
         project_id: projectId,
+        canvas_id: canvasId,   // Phase C Step3b: 落回当前画布
         image_provider: 'dataeyes',
         image_model: autoModel ? undefined : selectedModel || undefined,
         auto_model: autoModel,

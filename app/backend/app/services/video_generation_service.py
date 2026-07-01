@@ -701,6 +701,7 @@ class DataEyesAIVideoProvider(VideoGenerationProvider):
                 duration=duration,
                 options_json=json.dumps(opts) if opts else None,
                 project_id=opts.get("project_id") or getattr(request, 'project_id', None),
+                canvas_id=opts.get("canvas_id"),   # Phase C Step3b: 落回发起画布(缺省 None→默认画布)
             )
             db.add(vt)
             db.commit()

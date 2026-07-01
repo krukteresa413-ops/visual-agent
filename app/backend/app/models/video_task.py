@@ -22,6 +22,7 @@ class VideoTask(Base):
     video_url = Column(String(1024), nullable=True)                   # Downloaded URL
     local_path = Column(String(1024), nullable=True)                  # Local file path
     project_id = Column(Integer, nullable=True, index=True)
+    canvas_id = Column(Integer, nullable=True, index=True)   # Phase C Step3b: 异步视频落回发起时的画布(缺省=项目默认画布)
     canvas_node_id = Column(String(100), nullable=True)
     error_message = Column(Text, nullable=True)
     poll_count = Column(Integer, default=0)

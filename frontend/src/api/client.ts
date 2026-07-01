@@ -295,11 +295,11 @@ export const api = {
       client.post<AsyncTask>('/generate-async', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       }).then(r => r.data),
-    quickGenerate: (params: { prompt: string; project_id?: number; prompt_template?: string; reference_image_url?: string; image_provider?: string; image_model?: string; auto_model?: boolean; agent_mode?: string; brief?: Record<string, unknown> }) =>
+    quickGenerate: (params: { prompt: string; project_id?: number; canvas_id?: number; prompt_template?: string; reference_image_url?: string; image_provider?: string; image_model?: string; auto_model?: boolean; agent_mode?: string; brief?: Record<string, unknown> }) =>
       client.post<AsyncTask>('/quick-generate', params).then(r => r.data),
     videoTaskStatus: (taskId: string) =>
       client.get<{ status: string; url?: string | null; error?: string | null }>(`/generation/video-task/${taskId}`).then(r => r.data),
-    orchestrate: (params: { prompt?: string; project_id?: number; brief?: Record<string, unknown>; platforms?: string[] }) =>
+    orchestrate: (params: { prompt?: string; project_id?: number; canvas_id?: number; brief?: Record<string, unknown>; platforms?: string[] }) =>
       client.post<AsyncTask>('/generate/orchestrate', params).then(r => r.data),
     pollTask: (taskId: string) =>
       client.get<AsyncTask>(`/generation/task/${taskId}`).then(r => r.data),
@@ -421,7 +421,7 @@ export const api = {
 
   // Canvas right-click image actions
   canvasImageActions: {
-    run: (payload: { project_id: number; asset_id: string; action: string; image_url: string; instruction?: string; provider?: string; model?: string }) =>
+    run: (payload: { project_id: number; canvas_id?: number; asset_id: string; action: string; image_url: string; instruction?: string; provider?: string; model?: string }) =>
       client.post('/canvas/image-action', payload).then(r => r.data),
   },
 
