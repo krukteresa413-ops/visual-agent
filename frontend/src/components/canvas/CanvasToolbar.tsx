@@ -36,6 +36,10 @@ const IcArrow = svg(<><path d="M6 18L18 6" /><path d="M10.5 6H18v7.5" /></>);
 const IcEllipse = svg(<ellipse cx="12" cy="12" rx="8" ry="6" />);
 const IcPolygon = svg(<path d="M12 4l7 5.1-2.7 8.4H7.7L5 9.1z" />);
 const IcStar = svg(<path d="M12 4.2l2.3 5.2 5.6.5-4.2 3.7 1.3 5.5L12 16.4l-5 2.4 1.3-5.5L4.1 9.9l5.6-.5z" />);
+// 画板尺寸预设的比例图标(正方/竖/横)
+const IcRatioSquare = svg(<rect x="6" y="6" width="12" height="12" rx="1.5" />);
+const IcRatioPortrait = svg(<rect x="8" y="4" width="8" height="16" rx="1.5" />);
+const IcRatioLandscape = svg(<rect x="4" y="8" width="16" height="8" rx="1.5" />);
 
 const Sparkle: FC = () => (
   <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" className="absolute -right-0.5 -top-0.5 text-orange-500" aria-hidden>
@@ -62,12 +66,21 @@ const SHAPE_MENU: MenuItem[] = [
   { action: 'shape-polygon', label: '多边形', Icon: IcPolygon },
   { action: 'shape-star', label: '星形', Icon: IcStar },
 ];
+// 画板:自由拖拽创建 + 常用尺寸预设(一键落板到视口中心)
+const FRAME_MENU: MenuItem[] = [
+  { action: 'frame', label: '自由画板', key: 'F', Icon: IcFrame },
+  { action: 'frame-1-1', label: '1:1 方形', Icon: IcRatioSquare },
+  { action: 'frame-9-16', label: '9:16 竖屏', Icon: IcRatioPortrait },
+  { action: 'frame-16-9', label: '16:9 横屏', Icon: IcRatioLandscape },
+  { action: 'frame-a4', label: 'A4 纸张', Icon: IcRatioPortrait },
+  { action: 'frame-web', label: '网页', Icon: IcRatioLandscape },
+];
 
 const LEFT: Tool[] = [
   { id: 'select', title: '选择 / 移动', Icon: IcCursor, menu: SELECT_MENU },
   { id: 'mark', title: '标记 / 图钉 (M)', Icon: IcTarget },
   { id: 'upload', title: '上传图片 / 视频', Icon: IcUpload, menu: UPLOAD_MENU },
-  { id: 'frame', title: '智能画板 (F)', Icon: IcFrame },
+  { id: 'frame', title: '智能画板 (F)', Icon: IcFrame, menu: FRAME_MENU },
   { id: 'shape', title: '快速图形', Icon: IcSquare, menu: SHAPE_MENU },
   { id: 'pen', title: '画笔 (P)', Icon: IcPen },
   { id: 'text', title: '文字 (T)', Icon: IcText },

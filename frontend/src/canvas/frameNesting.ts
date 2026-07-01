@@ -48,6 +48,19 @@ export function absolutePosition(
   return parent ? { x: parent.position.x + node.position.x, y: parent.position.y + node.position.y } : node.position;
 }
 
+// 给定绝对点 (cx,cy),返回中心落入的「最内层」(面积最小)画板 id;无则 null。excludeId 排除自身(拖画板时)。
+// 供 resolveContainment(落定 reparent) 与「拖动中高亮」共用同一套命中规则,保证"高亮的框=松手会归属的框"。
+export function frameUnderPoint(cx: number, cy: number, boxes: NestBox[], excludeId?: string): string | null {
+  let target: NestBox | null = null;
+  for (const n of boxes) {
+    if (n.type !== 'frame' || n.id === excludeId) continue;
+    if (cx >= n.position.x && cx <= n.position.x + n.width && cy >= n.position.y && cy <= n.position.y + n.height) {
+      if (!target || n.width * n.height < target.width * target.height) target = n;
+    }
+  }
+  return target ? target.id : null;
+}
+
 // 给定被拖拽节点,算它落定后该归属哪个画板(或脱离)。返回 null 表示无需变化。
 // 返回 { parentId: string|null, position }:归属时 position 为相对父坐标;脱离时为绝对坐标。
 export function resolveContainment(
@@ -65,19 +78,49 @@ export function resolveContainment(
   const cx = abs.x + dragged.width / 2;
   const cy = abs.y + dragged.height / 2;
 
-  // 命中画板:中心落在某 frame 绝对包围盒内;多个重叠取面积最小者(最内层)。
-  let target: NestBox | null = null;
-  for (const n of nodes) {
-    if (n.type !== 'frame' || n.id === draggedId) continue;
-    if (cx >= n.position.x && cx <= n.position.x + n.width && cy >= n.position.y && cy <= n.position.y + n.height) {
-      if (!target || n.width * n.height < target.width * target.height) target = n;
-    }
+  const nextId = frameUnderPoint(cx, cy, nodes, draggedId); // 命中最内层画板(与拖动高亮同规则)
+  const current = dragged.parentId || null;
+  if (nextId === current) return null; // 无变化
+
+  if (nextId) {
+    const target = byId.get(nextId)!;
+    return { parentId: nextId, position: { x: abs.x - target.position.x, y: abs.y - target.position.y } };
+  }
+  return { parentId: null, position: abs }; // 脱离 → 绝对坐标
+}
+
+// 一键「适应内容」:按子节点包围盒 shrink-wrap 画板(四周留 padding),并补偿子节点相对坐标使其视觉不动。
+// 画板恒为顶层(position 即绝对);子 position 相对父。无子节点返回 null(不改)。
+// 返回:画板新的绝对 position + 尺寸,以及每个子节点的新相对 position。
+export function fitFrameToChildren(
+  frameId: string,
+  boxes: NestBox[],
+  padding = 24,
+): { position: { x: number; y: number }; width: number; height: number; children: Array<{ id: string; position: { x: number; y: number } }> } | null {
+  const frame = boxes.find((b) => b.id === frameId);
+  if (!frame) return null;
+  const children = boxes.filter((b) => b.parentId === frameId);
+  if (!children.length) return null;
+
+  // 子坐标相对父,直接在相对系里求包围盒。
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const c of children) {
+    minX = Math.min(minX, c.position.x);
+    minY = Math.min(minY, c.position.y);
+    maxX = Math.max(maxX, c.position.x + c.width);
+    maxY = Math.max(maxY, c.position.y + c.height);
   }
 
-  const current = dragged.parentId || null;
-  const next = target ? target.id : null;
-  if (next === current) return null; // 无变化
+  // 新画板绝对左上 = 父绝对 + (包围盒左上) - padding。
+  const newX = frame.position.x + minX - padding;
+  const newY = frame.position.y + minY - padding;
+  const width = (maxX - minX) + padding * 2;
+  const height = (maxY - minY) + padding * 2;
 
-  if (target) return { parentId: target.id, position: { x: abs.x - target.position.x, y: abs.y - target.position.y } };
-  return { parentId: null, position: abs }; // 脱离 → 绝对坐标
+  // 子新相对 = 子绝对 - 新父绝对 = 旧相对 + (父绝对 - 新父绝对);保证视觉位置不变。
+  const dx = frame.position.x - newX;
+  const dy = frame.position.y - newY;
+  const updatedChildren = children.map((c) => ({ id: c.id, position: { x: c.position.x + dx, y: c.position.y + dy } }));
+
+  return { position: { x: newX, y: newY }, width, height, children: updatedChildren };
 }

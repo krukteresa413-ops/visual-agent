@@ -17,9 +17,10 @@ import {
 } from '@xyflow/react';
 import { api } from '../api/client';
 import { flowToLegacyCanvas, legacyToFlowCanvas, upsertFlowCanvasNode } from '../canvas/canvasAdapters';
-import { absolutePosition, orderByParent, resolveContainment } from '../canvas/frameNesting';
+import { absolutePosition, fitFrameToChildren, frameUnderPoint, orderByParent, resolveContainment } from '../canvas/frameNesting';
 import { getHelperLines } from '../canvas/helperLines';
 import { reorderLayer, type LayerOp } from '../canvas/layerOrder';
+import { DropTargetContext } from '../canvas/dropTargetContext';
 import { useCanvasPersistence } from '../canvas/useCanvasPersistence';
 import { useCanvasHistory } from '../canvas/useCanvasHistory';
 import { buildSelectionContext, type SelectionContextItem } from '../canvas/selectionContext';
@@ -65,6 +66,15 @@ const SHAPE_MAP: Record<string, string> = {
   'shape-arrow': 'arrow',
   'shape-polygon': 'polygon',
   'shape-star': 'star',
+};
+
+// 画板尺寸预设(flow 单位):选中即在视口中心落一个该尺寸的画板。
+const FRAME_PRESETS: Record<string, { w: number; h: number; label: string }> = {
+  'frame-1-1': { w: 1080, h: 1080, label: '方形画板' },
+  'frame-9-16': { w: 1080, h: 1920, label: '竖屏画板' },
+  'frame-16-9': { w: 1920, h: 1080, label: '横屏画板' },
+  'frame-a4': { w: 794, h: 1123, label: 'A4 画板' },
+  'frame-web': { w: 1440, h: 1024, label: '网页画板' },
 };
 
 function buildFallbackState(props: CanvasFlowProps): LegacyCanvasState {
@@ -136,6 +146,8 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   const { getNodes, getEdges, getViewport, screenToFlowPosition, fitView } = useReactFlow();
   // 对齐吸附:拖拽中显示的参考线(绝对流坐标);拖拽结束清空。
   const [helperLines, setHelperLines] = useState<{ vertical?: number; horizontal?: number }>({});
+  // 拖入高亮:拖动中被拖节点会归属到的目标画板 id(经 Context 下发给 FrameNode);非拖动/未命中为 null。
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const { saveCanvas, rememberSavedCanvas } = useCanvasPersistence(projectId);
 
   // L0 编辑器地基:统一提交层 + 撤销/重做。所有「语义操作完成」点都走 commit(更新 state + 入撤销栈 + 持久化);
@@ -349,19 +361,42 @@ function CanvasFlowInner(props: CanvasFlowProps) {
         const snap = computeSnap(ch.id, ch.position, distance);
         // true/false 两帧都吸附(保证落定位置=吸附后,不依赖 onNodesChange 与 onNodeDragStop 的先后);仅拖拽中显参考线。
         if (snap.position) ch.position = snap.position;
-        if (ch.dragging) setHelperLines({ vertical: snap.vertical, horizontal: snap.horizontal });
-        else setHelperLines((prev) => (prev.vertical === undefined && prev.horizontal === undefined ? prev : {}));
+        if (ch.dragging) {
+          setHelperLines({ vertical: snap.vertical, horizontal: snap.horizontal });
+          // 拖入高亮:算被拖节点(吸附后)的绝对中心 → 命中最内层画板(与落定 reparent 同规则)。
+          const all = getNodes() as typeof nodes;
+          const moving = all.find((n) => n.id === ch.id);
+          if (moving && moving.type !== 'frame') {
+            const parent = moving.parentId ? all.find((n) => n.id === moving.parentId) : undefined;
+            const ppos = parent ? parent.position : { x: 0, y: 0 };
+            const mw = Number((moving.data as { width?: number })?.width ?? moving.width ?? 0);
+            const mh = Number((moving.data as { height?: number })?.height ?? moving.height ?? 0);
+            const cx = ppos.x + ch.position.x + mw / 2;
+            const cy = ppos.y + ch.position.y + mh / 2;
+            // 画板恒为顶层 → 其 position 即绝对;frameUnderPoint 只看 frame,故直接用原始 position。
+            const boxes = all.map((n) => ({ id: n.id, type: String(n.type ?? ''), parentId: n.parentId, position: n.position, width: Number((n.data as { width?: number })?.width ?? n.width ?? 0), height: Number((n.data as { height?: number })?.height ?? n.height ?? 0) }));
+            setDropTargetId(frameUnderPoint(cx, cy, boxes, ch.id));
+          } else {
+            setDropTargetId(null);
+          }
+        } else {
+          setHelperLines((prev) => (prev.vertical === undefined && prev.horizontal === undefined ? prev : {}));
+          setDropTargetId(null); // 拖动结束帧:清高亮
+        }
       }
     } else {
       setHelperLines((prev) => (prev.vertical === undefined && prev.horizontal === undefined ? prev : {}));
+      setDropTargetId(null);
     }
     onNodesChange(changes);
-  }, [computeSnap, getViewport, onNodesChange]);
+  }, [computeSnap, getViewport, onNodesChange, getNodes]);
 
   // 拖拽落定:先对被拖拽节点做一次权威吸附(保证持久化位置=吸附后),清参考线;再拖进画板自动归属
   // (绝对→相对父)、拖出自动脱离(相对→绝对),按「父在子前」重排(React Flow 约束),最后整图保存。
   const noteDragStop = useCallback((_e: MouseEvent | TouchEvent, node: Node) => {
     setHelperLines((prev) => (prev.vertical === undefined && prev.horizontal === undefined ? prev : {}));
+    setDropTargetId(null); // 落定:清拖入高亮
+
     // 权威吸附:用落定的相对坐标算一次吸附,写回被拖拽节点,保证「持久化位置 = 吸附后位置」。
     // 仅单节点拖拽时吸附:多选整组拖动时,只吸「被抓的那个」会让它相对整组偏移、破坏组内相对布局,故跳过。
     const distance = SNAP_PX / (getViewport().zoom || 1);
@@ -588,6 +623,27 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     return () => window.removeEventListener('moyag:canvas-persist', handler);
   }, [commit]);
 
+  // 画板「适应内容」:FrameNode 标题按钮派事件 → 按子节点包围盒 shrink-wrap(补偿子坐标视觉不动)→ commit。
+  // 子 position 相对父、frame(顶层) position 即绝对,故 boxes 直接用原始 position(fitFrameToChildren 据此计算)。
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const frameId = (e as CustomEvent).detail?.frameId;
+      if (!frameId) return;
+      const all = getNodes() as typeof nodes;
+      const boxes = all.map((n) => ({ id: n.id, type: String(n.type ?? ''), parentId: n.parentId, position: n.position, width: Number((n.data as { width?: number })?.width ?? n.width ?? 0), height: Number((n.data as { height?: number })?.height ?? n.height ?? 0) }));
+      const fit = fitFrameToChildren(String(frameId), boxes);
+      if (!fit) { setCanvasNotice({ kind: 'info', text: '空画板:先往画板里放点东西再适应内容' }); return; }
+      const next = all.map((n) => {
+        if (n.id === frameId) return { ...n, position: fit.position, width: fit.width, height: fit.height, data: { ...n.data, width: fit.width, height: fit.height } };
+        const cu = fit.children.find((c) => c.id === n.id);
+        return cu ? { ...n, position: cu.position } : n;
+      }) as typeof nodes;
+      commit({ nodes: next });
+    };
+    window.addEventListener('moyag:fit-frame', handler as EventListener);
+    return () => window.removeEventListener('moyag:fit-frame', handler as EventListener);
+  }, [getNodes, commit]);
+
   const confirmReedit = () => {
     const id = reeditNodeId;
     const text = reeditText.trim();
@@ -798,6 +854,23 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     setGenComposer({ kind });
   }, []);
 
+  // 尺寸预设:在当前视口中心落一个预设尺寸的画板(走 commit,持久 + 可撤销);不经拖拽层。
+  const dropPresetFrame = useCallback((action: string) => {
+    const preset = FRAME_PRESETS[action];
+    if (!preset) return;
+    const stageEl = document.querySelector('[data-flow-canvas-stage]') as HTMLElement | null;
+    const rect = stageEl?.getBoundingClientRect();
+    const center = rect
+      ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+      : { x: 200, y: 200 };
+    const id = `frame_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const el = { id, type: 'frame', label: preset.label, x: center.x - preset.w / 2, y: center.y - preset.h / 2, width: preset.w, height: preset.h };
+    const next = upsertFlowCanvasNode(getNodes() as typeof nodes, el as never) as typeof nodes;
+    commit({ nodes: next });
+    // 新画板常比视口大,缩放到它以便看全(小尺寸不放大过头 maxZoom:1)。
+    window.setTimeout(() => fitView({ nodes: [{ id }], padding: 0.2, duration: 240, maxZoom: 1 }), 30);
+  }, [getNodes, commit, screenToFlowPosition, fitView]);
+
   // 工具栏动作分发(action id 由 CanvasToolbar 的下拉/按钮给出)
   const handleTool = (action: string) => {
     if (action === 'select') { setPendingTool(null); setToolMode('select'); return; }
@@ -815,6 +888,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       setCanvasNotice({ kind: 'info', text: '在画布上点击放置标记' });
       return;
     }
+    if (FRAME_PRESETS[action]) { setPendingTool(null); dropPresetFrame(action); return; }
     if (action === 'text' || action === 'frame' || action.startsWith('shape-')) {
       setPendingTool(action);
       return;
@@ -1071,6 +1145,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
           )}
           {selectedActionAnchor && <ImageActionBar left={selectedActionAnchor.left} top={selectedActionAnchor.top} onAction={handleImageAction} busy={imgActionBusy} elementType={String((selectedActionNode?.data as { type?: string })?.type || '')} />}
           <input ref={toolFileRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (e.target) e.target.value = ''; void handleToolImportFile(f || undefined); }} />
+          <DropTargetContext.Provider value={dropTargetId}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -1117,6 +1192,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
               </div>
             </Panel>
           </ReactFlow>
+          </DropTargetContext.Provider>
           {/* 可自由拖动的底栏:渲染在 stage 覆盖层,不再用 React Flow Panel 固定居中(位置存 localStorage) */}
           <CanvasToolbarDock onTool={handleTool} />
           {/* AI 图/视频撰写浮窗:点「生成」才生成并落到视口中心,关闭即零落地 */}
