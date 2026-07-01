@@ -16,7 +16,7 @@ import {
   type Viewport,
 } from '@xyflow/react';
 import { api } from '../api/client';
-import { legacyToFlowCanvas, upsertFlowCanvasNode } from '../canvas/canvasAdapters';
+import { flowToLegacyCanvas, legacyToFlowCanvas, upsertFlowCanvasNode } from '../canvas/canvasAdapters';
 import { absolutePosition, orderByParent, resolveContainment } from '../canvas/frameNesting';
 import { useCanvasPersistence } from '../canvas/useCanvasPersistence';
 import { useCanvasHistory } from '../canvas/useCanvasHistory';
@@ -90,6 +90,19 @@ function buildFallbackState(props: CanvasFlowProps): LegacyCanvasState {
   return { elements, connections: [], viewport: { x: 0, y: 0, scale: 1 } };
 }
 
+// 聚焦某节点内的 contentEditable(文字节点)并把光标置末尾;用于「文字创建后 / 双击直接可输入」。
+function focusContentEditable(nodeId: string) {
+  const host = document.querySelector(`.react-flow__node[data-id="${nodeId}"] [contenteditable]`) as HTMLElement | null;
+  if (!host) return;
+  host.focus();
+  const range = document.createRange();
+  range.selectNodeContents(host);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(range);
+}
+
 function CanvasFlowInner(props: CanvasFlowProps) {
   const projectId = props.projectId || 2;
   const nodeTypes = useMemo(() => ({ canvasElement: AssetNode, generator: GeneratorNode, shape: ShapeNode, text: TextNode, mark: MarkNode, freedraw: FreedrawNode, frame: FrameNode }), []);
@@ -155,6 +168,44 @@ function CanvasFlowInner(props: CanvasFlowProps) {
     commit({ nodes: remaining, edges: remainingEdges });
     setSelectedActionNode(null);
   }, [commit, getNodes, getEdges]);
+
+  // 复制/粘贴/再制:内部剪贴板存「绝对坐标的顶层 legacy 元素」;粘贴生成新 id、递增偏移并选中新节点。
+  const clipboardRef = useRef<LegacyCanvasState['elements']>([]);
+  const pasteCountRef = useRef(0);
+
+  const copySelection = useCallback(() => {
+    const all = getNodes() as typeof nodes;
+    const sel = all.filter((n) => n.selected && n.type !== 'generator');
+    if (!sel.length) return;
+    clipboardRef.current = sel.map((n) => {
+      const abs = absolutePosition(n, all);
+      const el = flowToLegacyCanvas({ nodes: [n], edges: [], viewport: getViewport() }).elements[0];
+      return { ...el, x: abs.x, y: abs.y, parentId: undefined };
+    });
+    pasteCountRef.current = 0;
+  }, [getNodes, getViewport]);
+
+  const pasteClipboard = useCallback(() => {
+    const items = clipboardRef.current;
+    if (!items.length) return;
+    pasteCountRef.current += 1;
+    const off = 24 * pasteCountRef.current;
+    let next = getNodes() as typeof nodes;
+    const newIds = new Set<string>();
+    items.forEach((el, i) => {
+      const type = String(el.type ?? 'node');
+      const newId = `${type}_${Date.now()}_${i}_${Math.floor(Math.random() * 100000)}`;
+      newIds.add(newId);
+      next = upsertFlowCanvasNode(next, { ...el, id: newId, x: Number(el.x ?? 0) + off, y: Number(el.y ?? 0) + off } as never) as typeof nodes;
+    });
+    next = next.map((n) => ({ ...n, selected: newIds.has(n.id) }));
+    commit({ nodes: next });
+  }, [getNodes, commit]);
+
+  const duplicateSelection = useCallback(() => {
+    copySelection();
+    pasteClipboard();
+  }, [copySelection, pasteClipboard]);
 
   const onRelationLabelCommit = useCallback((edgeId: string, label: string) => {
     const nextEdges = (getEdges() as typeof edges).map(edge => edge.id === edgeId
@@ -456,6 +507,13 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     return () => window.removeEventListener('moyag:reedit', handler as EventListener);
   }, []);
 
+  // 文字节点失焦提交后:延一拍等 setNodes flush,再把内容改动入历史 + 持久化
+  useEffect(() => {
+    const handler = () => { window.setTimeout(() => commit({}), 0); };
+    window.addEventListener('moyag:canvas-persist', handler);
+    return () => window.removeEventListener('moyag:canvas-persist', handler);
+  }, [commit]);
+
   const confirmReedit = () => {
     const id = reeditNodeId;
     const text = reeditText.trim();
@@ -684,8 +742,8 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     let el: Record<string, unknown>;
     if (tool === 'text') {
       el = dragged
-        ? { id, type: 'text', label: '文字', x, y, width: Math.max(48, dw), height: Math.max(28, dh), metadata: { fontSize: 18 } }
-        : { id, type: 'text', label: '文字', x: start.x, y: start.y, width: 120, height: 40, metadata: { fontSize: 18 } };
+        ? { id, type: 'text', label: '', x, y, width: Math.max(48, dw), height: Math.max(28, dh), metadata: { fontSize: 18 } }
+        : { id, type: 'text', label: '', x: start.x, y: start.y, width: 120, height: 40, metadata: { fontSize: 18 } };
     } else if (tool === 'frame') {
       el = dragged
         ? { id, type: 'frame', label: '画板', x, y, width: Math.max(120, dw), height: Math.max(90, dh) }
@@ -699,9 +757,14 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
         ? { id, type: 'shape', label: '', x, y, width: Math.max(12, dw), height: Math.max(12, dh), metadata: meta }
         : { id, type: 'shape', label: '', x: start.x, y: start.y, width: 160, height: isLine ? 100 : 120, metadata: meta };
     }
-    const next = upsertFlowCanvasNode(getNodes() as typeof nodes, el as never) as typeof nodes;
+    let next = upsertFlowCanvasNode(getNodes() as typeof nodes, el as never) as typeof nodes;
+    if (tool === 'text') next = next.map((n) => ({ ...n, selected: n.id === id })) as typeof nodes;
     commit({ nodes: next });
-    // 连续放置:保持当前工具可继续拖拽创建;按 Esc 或 V 退出放置模式
+    if (tool === 'text') {
+      // 文字:创建后退出放置 + 选中 + 自动聚焦空框,直接输入(仿 Lovart);图形/画板仍连续放置
+      setPendingTool(null);
+      window.setTimeout(() => focusContentEditable(id), 30);
+    }
   }, [pendingTool, getNodes, commit]);
 
   // 画笔落定:把 flow 采样点 → 包围盒定位 + perfect-freehand 轮廓 → FreedrawNode
@@ -735,6 +798,9 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       const meta = e.metaKey || e.ctrlKey;
       if (meta && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) handleRedo(); else handleUndo(); return; }
       if (meta && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); handleRedo(); return; }
+      if (meta && (e.key === 'c' || e.key === 'C')) { if (isEditing(e.target)) return; e.preventDefault(); copySelection(); return; }
+      if (meta && (e.key === 'v' || e.key === 'V')) { if (isEditing(e.target)) return; e.preventDefault(); pasteClipboard(); return; }
+      if (meta && (e.key === 'd' || e.key === 'D')) { if (isEditing(e.target)) return; e.preventDefault(); duplicateSelection(); return; }
       if (e.key === 'Escape') { setPendingTool(null); return; }
       if (meta || isEditing(e.target)) return;
       if (e.key === 'v' || e.key === 'V') { setPendingTool(null); setToolMode('select'); return; }
@@ -743,7 +809,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleUndo, handleRedo, deleteSelected]);
+  }, [handleUndo, handleRedo, deleteSelected, copySelection, pasteClipboard, duplicateSelection]);
 
   // 选中单个 文字/图形/自由绘 节点时弹属性面板;实时从 nodes 取该节点
   // (selectedActionNode 是选中那刻的快照,改样式后会过时,故按 id 取最新)。
@@ -782,7 +848,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div data-flow-canvas-stage data-canvas-tool-mode={pendingTool ? 'place' : toolMode} className="relative min-w-0 flex-1 overflow-hidden">
           {/* V/H/放置 的光标:覆盖 React Flow 内置 .react-flow__pane cursor(更高优先级,据 data-canvas-tool-mode) */}
-          <style>{`[data-canvas-tool-mode="place"] .react-flow__pane{cursor:crosshair}[data-canvas-tool-mode="select"] .react-flow__pane{cursor:default}[data-canvas-tool-mode="move"] .react-flow__pane{cursor:grab}[data-canvas-tool-mode="move"] .react-flow__pane.dragging{cursor:grabbing}`}</style>
+          <style>{`[data-canvas-tool-mode="place"] .react-flow__pane{cursor:crosshair}[data-canvas-tool-mode="select"] .react-flow__pane{cursor:default}[data-canvas-tool-mode="move"] .react-flow__pane{cursor:grab}[data-canvas-tool-mode="move"] .react-flow__pane.dragging{cursor:grabbing}[data-text-placeholder]:focus:empty::before{content:attr(data-text-placeholder);color:#9ca3af;pointer-events:none}`}</style>
           {/* 图二:画布内二次编辑弹窗(替代浏览器原生 prompt) */}
           {reeditNodeId && (
             <div className="absolute inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setReeditNodeId(null)}>

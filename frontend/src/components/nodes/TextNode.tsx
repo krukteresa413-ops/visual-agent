@@ -20,16 +20,20 @@ function TextNode({ id, data, selected }: NodeProps) {
   const commit = () => {
     const text = ref.current?.innerText ?? '';
     setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, data: { ...n.data, label: text } } : n)));
+    // 通知画布把文字改动入历史 + 持久化(TextNode 自身只更新 store,不碰 save)
+    window.dispatchEvent(new CustomEvent('moyag:canvas-persist'));
   };
 
   return (
-    <div className={`rounded ${selected ? 'ring-1 ring-orange-300' : ''}`} style={{ minWidth: 48 }}>
+    <div className={`rounded ${selected ? 'ring-2 ring-blue-400' : ''}`} style={{ minWidth: 48 }}>
       <div
         ref={ref}
         contentEditable
         suppressContentEditableWarning
         spellCheck={false}
+        data-text-placeholder="输入文字"
         onBlur={commit}
+        onDoubleClick={() => ref.current?.focus()}
         onMouseDown={(e) => { if (document.activeElement === ref.current) e.stopPropagation(); }}
         className="nodrag whitespace-pre-wrap break-words outline-none"
         style={{

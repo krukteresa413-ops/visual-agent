@@ -174,4 +174,26 @@ describe('S3 React Flow canvas contract', () => {
     expect(history).toContain('export function redo');
   });
 
+  it('CanvasFlow supports copy/paste/duplicate of selected nodes via internal clipboard', () => {
+    const flow = read('components/CanvasFlow.tsx');
+
+    expect(flow).toContain('clipboardRef');
+    expect(flow).toContain('copySelection');
+    expect(flow).toContain('pasteClipboard');
+    expect(flow).toContain('duplicateSelection');
+    // Ctrl+C/V/D 走快捷键,且编辑文本时放行系统行为
+    expect(flow).toMatch(/key === 'c' \|\| e\.key === 'C'/);
+    expect(flow).toMatch(/key === 'v' \|\| e\.key === 'V'/);
+    expect(flow).toMatch(/key === 'd' \|\| e\.key === 'D'/);
+  });
+
+  it('text tool creates an empty auto-focused editable box (not a static label)', () => {
+    const flow = read('components/CanvasFlow.tsx');
+    const textNode = read('components/nodes/TextNode.tsx');
+
+    expect(flow).toContain('focusContentEditable');
+    expect(flow).not.toContain("label: '文字'");
+    expect(textNode).toContain('data-text-placeholder');
+  });
+
 });
