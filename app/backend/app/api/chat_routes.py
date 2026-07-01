@@ -14,7 +14,7 @@ import json
 import logging
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -109,7 +109,16 @@ def get_chat_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    from app.services.canvas_service import get_chat_conversation_for
+    from app.services.canvas_service import (
+        assert_canvas_access,
+        assert_project_access,
+        get_chat_conversation_for,
+    )
+    assert_project_access(db, project_id, current_user)
+    if canvas_id is not None:
+        guarded = assert_canvas_access(db, canvas_id, current_user)
+        if guarded.project_id != project_id:
+            raise HTTPException(status_code=404, detail="canvas not found in project")
     _canvas, conv = get_chat_conversation_for(db, project_id, current_user.tenant_id, canvas_id)
     if not conv:
         return {"messages": []}
@@ -125,7 +134,16 @@ def save_chat_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    from app.services.canvas_service import get_chat_conversation_for
+    from app.services.canvas_service import (
+        assert_canvas_access,
+        assert_project_access,
+        get_chat_conversation_for,
+    )
+    assert_project_access(db, req.project_id, current_user)
+    if req.canvas_id is not None:
+        guarded = assert_canvas_access(db, req.canvas_id, current_user)
+        if guarded.project_id != req.project_id:
+            raise HTTPException(status_code=404, detail="canvas not found in project")
     payload = json.dumps(req.messages, ensure_ascii=False)
     _canvas, conv = get_chat_conversation_for(
         db, req.project_id, current_user.tenant_id, req.canvas_id, create=True

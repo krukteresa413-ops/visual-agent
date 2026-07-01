@@ -54,6 +54,7 @@ from app.api.chat_routes import router as chat_router
 from app.api.payment_routes import router as payment_router
 from app.api.credits_routes import router as credits_router
 from app.api.share_routes import router as share_router
+from app.api.canvas_crud_routes import router as canvas_crud_router  # Phase C Step 2 一项目多画布 CRUD
 
 
 Base.metadata.create_all(bind=engine)
@@ -110,6 +111,7 @@ app.include_router(canvas_image_action_router)
 app.include_router(payment_router)
 app.include_router(credits_router)
 app.include_router(share_router)
+app.include_router(canvas_crud_router)
 
 
 @app.get("/health")

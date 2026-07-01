@@ -9,6 +9,7 @@ ChatConversation，并自愈迁移窗口内老代码可能创建的 canvas_id=NU
 """
 from typing import Optional, Tuple
 
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.canvas import Canvas
@@ -104,3 +105,51 @@ def get_chat_conversation_for(
         db.commit()
         db.refresh(conv)
     return canvas, conv
+
+
+# ── 租户守卫(Phase C Step 2) ──────────────────────────────────────────
+# 供 canvas CRUD / canvas-state / chat 等端点复用。宽松式: 仅当资源与用户的
+# tenant_id 都非空且不等才拒绝(兼容 legacy tenant_id=NULL 的老数据, 对齐 share_routes/
+# project_routes 的做法); platform_admin 一律放行。user 走鸭子类型, 只取 .role/.tenant_id,
+# 不 import User 以免耦合 auth 模型。
+
+
+def assert_project_access(db: Session, project_id: int, user) -> "object":
+    """项目须属于当前用户租户; 返回 Project。不存在→404, 越权→403。"""
+    from app.models.project import Project
+
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    if getattr(user, "role", None) == "platform_admin":
+        return project
+    if (
+        project.tenant_id is not None
+        and getattr(user, "tenant_id", None) is not None
+        and project.tenant_id != user.tenant_id
+    ):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return project
+
+
+def assert_canvas_access(db: Session, canvas_id: int, user) -> Canvas:
+    """canvas 须属于当前用户租户; 返回 Canvas。不存在→404, 越权→403。
+    canvas.tenant_id 可能为空(老项目未回填), 则回退经 project 求租户。"""
+    canvas = db.query(Canvas).filter(Canvas.id == canvas_id).first()
+    if canvas is None:
+        raise HTTPException(status_code=404, detail="canvas not found")
+    if getattr(user, "role", None) == "platform_admin":
+        return canvas
+    tenant_id = canvas.tenant_id
+    if tenant_id is None:
+        from app.models.project import Project
+
+        proj = db.query(Project).filter(Project.id == canvas.project_id).first()
+        tenant_id = proj.tenant_id if proj is not None else None
+    if (
+        tenant_id is not None
+        and getattr(user, "tenant_id", None) is not None
+        and tenant_id != user.tenant_id
+    ):
+        raise HTTPException(status_code=403, detail="forbidden")
+    return canvas

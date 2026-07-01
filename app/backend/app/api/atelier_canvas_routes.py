@@ -16,8 +16,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
+from app.models.auth import User
 from app.models.canvas_state import CanvasState
 from app.models.visual_asset import VisualAsset
+from app.services.auth_service import get_current_user
 
 router = APIRouter(prefix="/api/v1", tags=["atelier-canvas"])
 
@@ -116,9 +118,23 @@ def get_db():
 # ── Canvas State ──────────────────────────────────────────────
 
 @router.get("/projects/{project_id}/canvas-state", response_model=CanvasStateResponse)
-def get_canvas_state(project_id: int, canvas_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+def get_canvas_state(
+    project_id: int,
+    canvas_id: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Load the full canvas state for a project's canvas (canvas_id 缺省=项目默认画布)."""
-    from app.services.canvas_service import get_canvas_state_for
+    from app.services.canvas_service import (
+        assert_canvas_access,
+        assert_project_access,
+        get_canvas_state_for,
+    )
+    assert_project_access(db, project_id, current_user)
+    if canvas_id is not None:
+        guarded = assert_canvas_access(db, canvas_id, current_user)
+        if guarded.project_id != project_id:
+            raise HTTPException(status_code=404, detail="canvas not found in project")
     _canvas, state = get_canvas_state_for(db, project_id, canvas_id)
 
     if not state:
@@ -143,10 +159,20 @@ def put_canvas_state(
     project_id: int,
     payload: CanvasStatePayload,
     canvas_id: Optional[int] = Query(None),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Save (create or update) the canvas state for a project's canvas (canvas_id 缺省=项目默认画布)."""
-    from app.services.canvas_service import get_canvas_state_for
+    from app.services.canvas_service import (
+        assert_canvas_access,
+        assert_project_access,
+        get_canvas_state_for,
+    )
+    assert_project_access(db, project_id, current_user)
+    if canvas_id is not None:
+        guarded = assert_canvas_access(db, canvas_id, current_user)
+        if guarded.project_id != project_id:
+            raise HTTPException(status_code=404, detail="canvas not found in project")
     canvas, state = get_canvas_state_for(db, project_id, canvas_id)
 
     elements_json = json.dumps(

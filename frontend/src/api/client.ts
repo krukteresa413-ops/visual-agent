@@ -44,6 +44,16 @@ export interface Project {
   generation_count: number;
 }
 
+// Phase C: 一项目多画布 —— 一张 Canvas = 1 画布状态 + 1 段对话
+export interface CanvasMeta {
+  id: number;
+  project_id: number;
+  name: string;
+  sort_order: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface DashboardData {
   total_projects: number;
   total_generations: number;
@@ -425,6 +435,20 @@ export const api = {
       client.get(`/projects/${projectId}/timeline`).then(r => r.data),
     getAssets: (projectId: number, params?: Record<string, unknown>) =>
       client.get(`/projects/${projectId}/canvas-assets`, { params }).then(r => r.data),
+  },
+
+  // Canvas CRUD (Phase C: 一项目多画布 —— list/create/rename/reorder/remove)
+  canvases: {
+    list: (projectId: number) =>
+      client.get<{ canvases: CanvasMeta[] }>(`/projects/${projectId}/canvases`).then(r => r.data.canvases),
+    create: (projectId: number, name?: string) =>
+      client.post<CanvasMeta>(`/projects/${projectId}/canvases`, { name }).then(r => r.data),
+    rename: (canvasId: number, name: string) =>
+      client.patch<CanvasMeta>(`/canvases/${canvasId}`, { name }).then(r => r.data),
+    reorder: (canvasId: number, sortOrder: number) =>
+      client.patch<CanvasMeta>(`/canvases/${canvasId}`, { sort_order: sortOrder }).then(r => r.data),
+    remove: (canvasId: number) =>
+      client.delete<{ ok: boolean; deleted: number }>(`/canvases/${canvasId}`).then(r => r.data),
   },
 
   // Font Generation APIs(对齐后端 font_generation_routes:JSON body,同步执行~16s,响应不含图 URL → 需查 history 取)
