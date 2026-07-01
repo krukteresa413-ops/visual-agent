@@ -19,6 +19,7 @@ import { api } from '../api/client';
 import { flowToLegacyCanvas, legacyToFlowCanvas, upsertFlowCanvasNode } from '../canvas/canvasAdapters';
 import { absolutePosition, orderByParent, resolveContainment } from '../canvas/frameNesting';
 import { getHelperLines } from '../canvas/helperLines';
+import { reorderLayer, type LayerOp } from '../canvas/layerOrder';
 import { useCanvasPersistence } from '../canvas/useCanvasPersistence';
 import { useCanvasHistory } from '../canvas/useCanvasHistory';
 import { buildSelectionContext, type SelectionContextItem } from '../canvas/selectionContext';
@@ -62,7 +63,7 @@ const SHAPE_MAP: Record<string, string> = {
   'shape-ellipse': 'ellipse',
   'shape-line': 'line',
   'shape-arrow': 'arrow',
-  'shape-polygon': 'diamond',
+  'shape-polygon': 'polygon',
   'shape-star': 'star',
 };
 
@@ -602,6 +603,27 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     return () => window.clearTimeout(t);
   }, [canvasNotice, reeditBusy, genBusy]);
 
+  // 图层顺序:置顶/置底/上移/下移。对选中节点(排除生成节点)按「同层稠密秩」重排,只改受影响节点的
+  // zIndex,走 commit(可撤销 + 持久化)。多选保序:front/backward 从底到顶施加、back/forward 从顶到底
+  // 施加,避免选区内互相抵消;单选(最常见)结果精确。空 Map(边界/无选中)则不 commit,不污染撤销栈。
+  const applyLayerOp = useCallback((op: LayerOp) => {
+    let cur = getNodes() as typeof nodes;
+    let targets = cur.filter((n) => n.selected && n.type !== 'generator');
+    if (!targets.length && selectedActionNode) targets = cur.filter((n) => n.id === selectedActionNode.id);
+    if (!targets.length) return;
+    const byZ = [...targets].sort((a, b) => Number(a.zIndex ?? 0) - Number(b.zIndex ?? 0));
+    const seq = (op === 'front' || op === 'backward') ? byZ : [...byZ].reverse();
+    let changed = false;
+    for (const t of seq) {
+      const zmap = reorderLayer(cur, t.id, op);
+      if (zmap.size) {
+        cur = cur.map((n) => (zmap.has(n.id) ? { ...n, zIndex: zmap.get(n.id)! } : n)) as typeof nodes;
+        changed = true;
+      }
+    }
+    if (changed) commit({ nodes: cur });
+  }, [getNodes, selectedActionNode, commit]);
+
   const [imgActionBusy, setImgActionBusy] = useState<string | null>(null);
   const handleImageAction = useCallback(async (id: string) => {
     const node = selectedActionNode;
@@ -620,11 +642,8 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       commit({ nodes: remaining });
       return;
     }
-    if (id === 'front' || id === 'back') {
-      const zs = (getNodes() as typeof nodes).map((n) => Number(n.zIndex ?? 0));
-      const z = id === 'front' ? Math.max(0, ...zs) + 1 : Math.min(0, ...zs) - 1;
-      const next = (getNodes() as typeof nodes).map((n) => (n.id === node.id ? { ...n, zIndex: z } : n));
-      commit({ nodes: next });
+    if (id === 'front' || id === 'back' || id === 'forward' || id === 'backward') {
+      applyLayerOp(id);
       return;
     }
     if (id === 'cutout') {
@@ -655,7 +674,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
         setImgActionBusy(null);
       }
     }
-  }, [selectedActionNode, getNodes, setNodes, setSelectedActionNode, commit, projectId, nodes]);
+  }, [selectedActionNode, getNodes, setNodes, setSelectedActionNode, commit, projectId, nodes, applyLayerOp]);
 
   // 图二 / Phase A:画布底部工具栏 — 选择/上传图已接;AI图/AI视频改为画布内「生成节点」(GeneratorNode)
   const [toolMode, setToolMode] = useState<string>('select');
@@ -691,18 +710,33 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
 
   const nextNodePos = () => { const n = getNodes().length; return { x: 80 + (n % 5) * 360, y: 80 + Math.floor(n / 5) * 320 }; };
 
-  const handleToolUploadFile = async (file: File | undefined) => {
+  // 打开系统文件选择器:同一个隐藏 input,点前按需动态设 accept(图片/视频/两者)。
+  const openImport = (accept: string) => {
+    const input = toolFileRef.current;
+    if (!input) return;
+    input.accept = accept;
+    input.value = '';
+    input.click();
+  };
+
+  // 本地导入:按文件 MIME 分流 —— 图片走 /upload/image 落 image 节点、视频走 /upload/video 落 video 节点
+  //(video 节点 = AssetNode 里 type==='video' + thumbnail_url → 渲染 <video controls>,可播放且持久)。
+  const handleToolImportFile = async (file: File | undefined) => {
     if (!file) return;
-    setCanvasNotice({ kind: 'info', text: '正在上传图片…' });
+    const isVideo = file.type.startsWith('video/');
+    setCanvasNotice({ kind: 'info', text: isVideo ? '正在上传视频…' : '正在上传图片…' });
     try {
       const form = new FormData(); form.append('file', file);
-      const res = await api.upload.image(form) as { url?: string };
+      const res = (isVideo ? await api.upload.video(form) : await api.upload.image(form)) as { url?: string };
       const url = res?.url; if (!url) throw new Error('no url');
       const pos = nextNodePos();
-      const el = { id: 'upload_' + String(getNodes().length) + '_' + url.slice(-10), type: 'image', label: file.name, x: pos.x, y: pos.y, width: 280, height: 280, thumbnail_url: url, asset_ref: { type: 'image', url }, metadata: { source: 'toolbar-upload' } };
+      const tag = url.slice(-10);
+      const el = isVideo
+        ? { id: 'video_' + String(getNodes().length) + '_' + tag, type: 'video', label: file.name, x: pos.x, y: pos.y, width: 320, height: 240, thumbnail_url: url, asset_ref: { type: 'video', url }, metadata: { source: 'toolbar-import' } }
+        : { id: 'image_' + String(getNodes().length) + '_' + tag, type: 'image', label: file.name, x: pos.x, y: pos.y, width: 280, height: 280, thumbnail_url: url, asset_ref: { type: 'image', url }, metadata: { source: 'toolbar-import' } };
       const next = upsertFlowCanvasNode(getNodes() as typeof nodes, el as never) as typeof nodes;
       commit({ nodes: next });
-      setCanvasNotice({ kind: 'info', text: '图片已加入画布' });
+      setCanvasNotice({ kind: 'info', text: isVideo ? '视频已加入画布' : '图片已加入画布' });
     } catch { setCanvasNotice({ kind: 'warn', text: '上传失败,请重试' }); }
   };
 
@@ -768,8 +802,9 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
   const handleTool = (action: string) => {
     if (action === 'select') { setPendingTool(null); setToolMode('select'); return; }
     if (action === 'move') { setPendingTool(null); setToolMode('move'); return; }
-    if (action === 'upload-image') { setPendingTool(null); toolFileRef.current?.click(); return; }
-    if (action === 'upload-video') { setCanvasNotice({ kind: 'info', text: '上传视频即将上线' }); return; }
+    if (action === 'import') { setPendingTool(null); openImport('image/*,video/*'); return; }
+    if (action === 'upload-image') { setPendingTool(null); openImport('image/*'); return; }
+    if (action === 'upload-video') { setPendingTool(null); openImport('video/*'); return; }
     if (action === 'ai-image') { openGenComposer('image'); return; }
     if (action === 'ai-video') { openGenComposer('video'); return; }
     // 画笔:进入持续绘制模式(覆盖层),双击/换工具退出;模式与颜色/笔宽由属性面板呈现
@@ -879,6 +914,9 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       if (meta && (e.key === 'c' || e.key === 'C')) { if (isEditing(e.target)) return; e.preventDefault(); copySelection(); return; }
       if (meta && (e.key === 'v' || e.key === 'V')) { if (isEditing(e.target)) return; e.preventDefault(); pasteClipboard(); return; }
       if (meta && (e.key === 'd' || e.key === 'D')) { if (isEditing(e.target)) return; e.preventDefault(); duplicateSelection(); return; }
+      // 图层顺序:Ctrl+] 上移 / Ctrl+[ 下移;加 Shift = 置顶 / 置底。用 e.code(物理键)避开 Shift 改字符。
+      if (meta && e.code === 'BracketRight') { if (isEditing(e.target)) return; e.preventDefault(); applyLayerOp(e.shiftKey ? 'front' : 'forward'); return; }
+      if (meta && e.code === 'BracketLeft') { if (isEditing(e.target)) return; e.preventDefault(); applyLayerOp(e.shiftKey ? 'back' : 'backward'); return; }
       if (e.key === 'Escape') { setPendingTool(null); return; }
       if (meta || isEditing(e.target)) return;
       if (e.shiftKey && e.code === 'Digit1') { e.preventDefault(); fitView({ padding: 0.2, duration: 220 }); return; }
@@ -889,7 +927,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleUndo, handleRedo, deleteSelected, copySelection, pasteClipboard, duplicateSelection, fitView, getNodes]);
+  }, [handleUndo, handleRedo, deleteSelected, copySelection, pasteClipboard, duplicateSelection, fitView, getNodes, applyLayerOp]);
 
   // 选中单个 文字/图形/自由绘 节点时弹属性面板;实时从 nodes 取该节点
   // (selectedActionNode 是选中那刻的快照,改样式后会过时,故按 id 取最新)。
@@ -1032,7 +1070,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
           </div>
           )}
           {selectedActionAnchor && <ImageActionBar left={selectedActionAnchor.left} top={selectedActionAnchor.top} onAction={handleImageAction} busy={imgActionBusy} elementType={String((selectedActionNode?.data as { type?: string })?.type || '')} />}
-          <input ref={toolFileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (e.target) e.target.value = ''; void handleToolUploadFile(f || undefined); }} />
+          <input ref={toolFileRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (e.target) e.target.value = ''; void handleToolImportFile(f || undefined); }} />
           <ReactFlow
             nodes={nodes}
             edges={edges}

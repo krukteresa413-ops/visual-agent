@@ -230,4 +230,49 @@ describe('canvas React Flow adapters', () => {
     expect('parentId' in flowToLegacyCanvas(flow).elements[0]).toBe(false);
   });
 
+  // ↓ 图层顺序:zIndex 必须走「顶层 node.zIndex」(React Flow 层叠所认),而非只留在 data 里。
+  it('把 legacy zIndex 提升为顶层 React Flow 属性(不再双写进 data)', () => {
+    const flow = legacyToFlowCanvas({
+      elements: [{ id: 'a', type: 'image', label: 'A', x: 0, y: 0, width: 100, height: 100, zIndex: 3 }],
+      connections: [],
+      viewport: { x: 0, y: 0, scale: 1 },
+    });
+
+    expect(flow.nodes[0].zIndex).toBe(3); // 顶层 → React Flow 据它层叠
+    expect('zIndex' in (flow.nodes[0].data as Record<string, unknown>)).toBe(false); // 不双写
+  });
+
+  it('顶层 zIndex 变更(置顶/置底按钮)能持久化回 legacy —— 修复前会被丢', () => {
+    const flow = legacyToFlowCanvas({
+      elements: [
+        { id: 'a', type: 'image', label: 'A', x: 0, y: 0, width: 100, height: 100 },
+        { id: 'b', type: 'image', label: 'B', x: 0, y: 0, width: 100, height: 100 },
+      ],
+      connections: [],
+      viewport: { x: 0, y: 0, scale: 1 },
+    });
+    flow.nodes[0].zIndex = 9; // 模拟置顶:改的是顶层 node.zIndex,不是 data.zIndex
+
+    const legacy = flowToLegacyCanvas(flow);
+    expect(legacy.elements.find((e) => e.id === 'a')?.zIndex).toBe(9);
+    expect(legacy.elements.find((e) => e.id === 'b')?.zIndex).toBeUndefined();
+  });
+
+  it('z 序往返不丢:置顶 → 持久化 → 重载后仍保留顶层 z', () => {
+    const state: LegacyCanvasState = {
+      elements: [
+        { id: 'a', type: 'image', label: 'A', x: 0, y: 0, width: 100, height: 100 },
+        { id: 'b', type: 'image', label: 'B', x: 0, y: 0, width: 100, height: 100 },
+      ],
+      connections: [],
+      viewport: { x: 0, y: 0, scale: 1 },
+    };
+    const flow = legacyToFlowCanvas(state);
+    flow.nodes[1].zIndex = 5; // 把 b 置顶
+
+    const reloaded = legacyToFlowCanvas(flowToLegacyCanvas(flow));
+    expect(reloaded.nodes.find((n) => n.data.legacy_id === 'b')?.zIndex).toBe(5);
+    expect(reloaded.nodes.find((n) => n.data.legacy_id === 'a')?.zIndex).toBeUndefined();
+  });
+
 });

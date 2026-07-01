@@ -34,6 +34,9 @@ export function legacyToFlowCanvas(state: LegacyCanvasState): FlowCanvasState {
         draggable: !element.locked,
         selectable: !element.locked,
         ...(element.parentId ? { parentId: element.parentId } : {}),
+        // zIndex 是 React Flow 层叠所认的「顶层属性」:回流时写顶层(而非 data),否则刷新后 z 序丢。
+        // 用 !== undefined 判定 —— z 可为 0/负数,不能用真值判断。
+        ...(element.zIndex !== undefined ? { zIndex: element.zIndex } : {}),
         data: {
           ...withoutGeometry(element),
           legacy_id: element.id,
@@ -61,7 +64,8 @@ export function flowToLegacyCanvas(state: FlowCanvasState): LegacyCanvasState {
   return {
     // Phase A:「生成节点」(type==='generator')是临时输入卡片,不持久化(否则回流会变成空的 AssetNode)。
     elements: state.nodes.filter(node => node.type !== 'generator').map(node => {
-      const { legacy_id: legacyId, ...data } = node.data;
+      // zIndex 从 data 剔除:它以「顶层 node.zIndex」为唯一真相持久化(见下),避免 data 里残留旧值双写。
+      const { legacy_id: legacyId, zIndex: _dataZIndex, ...data } = node.data;
       return {
         ...data,
         id: legacyId || node.id,
@@ -70,6 +74,8 @@ export function flowToLegacyCanvas(state: FlowCanvasState): LegacyCanvasState {
         width: node.data.width,
         height: node.data.height,
         ...(node.parentId ? { parentId: node.parentId } : {}),
+        // 持久化顶层 zIndex(置顶/置底/上下移改的就是它);未设则不落该键。
+        ...(node.zIndex !== undefined ? { zIndex: node.zIndex } : {}),
       };
     }),
     connections: state.edges.map(edge => {
@@ -95,6 +101,8 @@ function withoutGeometry(element: LegacyCanvasElement) {
   // parentId 是 React Flow 节点的顶层属性,单独承载;从 data 剔除以免 un-parent 后残留旧值。
   const clean: typeof data = { ...data };
   delete clean.parentId;
+  // zIndex 与 parentId 同:是 React Flow 节点的顶层属性,从 data 剔除,回流后避免顶层/data 双写不一致。
+  delete clean.zIndex;
   return clean;
 }
 

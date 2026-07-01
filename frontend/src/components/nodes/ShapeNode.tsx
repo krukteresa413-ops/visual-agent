@@ -2,10 +2,24 @@ import { memo } from 'react';
 import { Handle, NodeResizer, Position, useReactFlow, type NodeProps } from '@xyflow/react';
 import type { FlowCanvasNodeData } from '../../canvas/canvasTypes';
 
-// 快速图形节点:用 SVG 画 矩形/椭圆/三角/菱形/星形/线/箭头,NodeResizer 拖角改大小。
+// 快速图形节点:用 SVG 画 矩形/椭圆/三角/菱形/多边形/星形/线/箭头,NodeResizer 拖角改大小。
 // 形状种类与样式存在 data.metadata.{shape,fill,stroke}(可持久化)。
 
-type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'diamond' | 'star' | 'line' | 'arrow';
+type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'diamond' | 'polygon' | 'star' | 'line' | 'arrow';
+
+// 正多边形顶点(默认五边形,匹配工具栏「多边形」图标);顶点朝上,填满包围盒(rx/ry 各半,非正方形时随之拉伸)。
+function polygonPoints(w: number, h: number, sides = 5): string {
+  const cx = w / 2;
+  const cy = h / 2;
+  const rx = Math.max(0, w / 2 - 1);
+  const ry = Math.max(0, h / 2 - 1);
+  const pts: string[] = [];
+  for (let i = 0; i < sides; i += 1) {
+    const a = ((2 * Math.PI) / sides) * i - Math.PI / 2;
+    pts.push(`${(cx + rx * Math.cos(a)).toFixed(1)},${(cy + ry * Math.sin(a)).toFixed(1)}`);
+  }
+  return pts.join(' ');
+}
 
 function starPoints(w: number, h: number): string {
   const cx = w / 2;
@@ -67,6 +81,7 @@ function ShapeNode({ id, data, selected, width: nodeW, height: nodeH }: NodeProp
         {shape === 'ellipse' && <ellipse cx={w / 2} cy={h / 2} rx={Math.max(0, w / 2 - sw)} ry={Math.max(0, h / 2 - sw)} fill={fill} stroke={stroke} strokeWidth={sw} />}
         {shape === 'triangle' && <polygon points={`${w / 2},${sw} ${w - sw},${h - sw} ${sw},${h - sw}`} fill={fill} stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />}
         {shape === 'diamond' && <polygon points={`${w / 2},${sw} ${w - sw},${h / 2} ${w / 2},${h - sw} ${sw},${h / 2}`} fill={fill} stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />}
+        {shape === 'polygon' && <polygon points={polygonPoints(w, h)} fill={fill} stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />}
         {shape === 'star' && <polygon points={starPoints(w, h)} fill={fill} stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />}
         {shape === 'line' && <line x1={pA.x} y1={pA.y} x2={pB.x} y2={pB.y} stroke={stroke} strokeWidth={sw + 1} strokeLinecap="round" />}
         {shape === 'arrow' && (

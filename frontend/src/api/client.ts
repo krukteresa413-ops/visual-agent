@@ -351,6 +351,10 @@ export const api = {
       client.post('/upload/image', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       }).then(r => r.data),
+    video: (formData: FormData) =>
+      client.post('/upload/video', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then(r => r.data),
     documentParse: (formData: FormData) =>
       client.post('/upload/document/parse', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },

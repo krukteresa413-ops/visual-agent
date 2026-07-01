@@ -39,6 +39,24 @@ async def delete_image(filename: str):
     filepath.unlink()
     return {'message': f'deleted {filename}'}
 
+ALLOWED_VIDEO = {'video/mp4', 'video/webm', 'video/quicktime', 'video/ogg'}
+MAX_VIDEO = 50 * 1024 * 1024  # 50MB
+
+@router.post('/video')
+async def upload_video(file: UploadFile = File(...)):
+    # 本地视频导入:落盘到 /uploads 并返回可播放 URL(与 /image 同机制,仅放开视频类型与更大上限)。
+    if file.content_type not in ALLOWED_VIDEO:
+        raise HTTPException(status_code=400, detail='不支持的视频类型(仅 mp4/webm/mov/ogg)')
+    content = await file.read()
+    if len(content) > MAX_VIDEO:
+        raise HTTPException(status_code=400, detail='视频超过50MB')
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    ext = file.filename.split('.')[-1] if '.' in file.filename else 'mp4'
+    filename = f'{uuid.uuid4().hex[:12]}.{ext}'
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    with open(filepath, 'wb') as f: f.write(content)
+    return {'filename': filename, 'url': f'/uploads/{filename}', 'size_bytes': len(content), 'content_type': file.content_type}
+
 ALLOWED_DOC = {'application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation','application/msword','application/vnd.ms-excel','application/vnd.ms-powerpoint','text/plain','text/csv'}
 MAX_DOC = 20*1024*1024
 

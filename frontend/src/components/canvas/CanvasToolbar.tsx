@@ -28,6 +28,7 @@ const IcText = svg(<><path d="M5 6h14" /><path d="M12 6v13" /><path d="M9 19h6" 
 const IcImage = svg(<><rect x="3.5" y="4.5" width="15" height="14" rx="2" /><circle cx="8" cy="9" r="1.3" /><path d="M4 15l4-3 4 2.5 2.5-1.8L18.5 15" /></>);
 const IcPlayFrame = svg(<><rect x="3.5" y="5" width="15" height="14" rx="2.6" /><path d="M9.6 9.6l4.4 2.4-4.4 2.4z" fill="currentColor" stroke="none" /></>);
 const IcTextBox = svg(<><rect x="3.5" y="4.5" width="15" height="15" rx="2.6" /><path d="M6.6 8.6h8.8M11 8.6v6.8" /></>);
+const IcPlus = svg(<><path d="M12 5v14M5 12h14" /></>);
 
 const IcRect = svg(<rect x="5" y="6.5" width="14" height="11" rx="1.5" />);
 const IcLine = svg(<path d="M5 19L19 5" />);
@@ -146,6 +147,17 @@ export default function CanvasToolbar({ onTool }: Props) {
       data-canvas-bottom-toolbar
       className="pointer-events-auto flex items-center gap-1 rounded-2xl border border-black/10 bg-white px-2 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
     >
+      {/* 从本地导入图片/视频的快捷入口(加号):直开系统选择器,不进入放置模式,故不设激活态。 */}
+      <button
+        type="button"
+        title="从本地导入图片 / 视频"
+        data-canvas-tool="import"
+        onClick={() => onTool('import')}
+        className="relative grid size-10 place-items-center rounded-[10px] text-[#2F3640] transition-colors hover:bg-[#F1F3F5]"
+      >
+        <IcPlus />
+      </button>
+      <span className="mx-1.5 h-6 w-px bg-black/10" />
       {LEFT.map(renderTool)}
       <span className="mx-1.5 h-6 w-px bg-black/10" />
       {AI.map(renderTool)}

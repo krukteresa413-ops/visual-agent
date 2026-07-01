@@ -1,11 +1,13 @@
-type Action = { id: string; label: string };
+type Action = { id: string; label: string; hint?: string };
 
-// 仅保留:下载 / 抠图 / 置顶 / 置底 / 删除
+// 下载 / 抠图 | 图层顺序(置底/下移/上移/置顶) | 删除。图层四操作另配快捷键(hint 显在 tooltip)。
 const ACTIONS: Action[] = [
   { id: 'download', label: '下载' },
   { id: 'cutout', label: '抠图' },
-  { id: 'front', label: '置顶' },
-  { id: 'back', label: '置底' },
+  { id: 'back', label: '置底', hint: '置底 (Ctrl+Shift+[)' },
+  { id: 'backward', label: '下移', hint: '下移一层 (Ctrl+[)' },
+  { id: 'forward', label: '上移', hint: '上移一层 (Ctrl+])' },
+  { id: 'front', label: '置顶', hint: '置顶 (Ctrl+Shift+])' },
   { id: 'delete', label: '删除' },
 ];
 
@@ -31,6 +33,7 @@ export default function ImageActionBar({ left, top, onAction, busy, elementType 
           key={action.id}
           data-image-action={action.id}
           type="button"
+          title={action.hint || action.label}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); onAction?.(action.id); }}
           disabled={busy === action.id}
