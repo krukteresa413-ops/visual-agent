@@ -102,9 +102,10 @@ class FontGenerationService:
         start_time = datetime.now()
         
         if provider == "mige":
-            # Use Mige API via image generation service
+            # Phase 1 图片路径:原绑定 mige,但 mige 额度已耗尽(用户额度不足)。改走 DataEyes
+            # (生产稳定 provider,画布 AI 图亦用它;默认模型 gpt-image-2),使字体生成实际可用。
             img_request = ImageGenerationRequest(
-                provider="mige",
+                provider="dataeyes",
                 prompt=prompt,
                 width=width,
                 height=height,

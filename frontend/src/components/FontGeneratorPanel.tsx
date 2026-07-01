@@ -19,7 +19,7 @@ interface FontItem {
 }
 
 export default function FontGeneratorPanel({
-  projectId,
+  // projectId 保留在 interface(调用方照传),但后端字体接口非项目维度,组件内不再使用。
   isOpen,
   onClose,
   onFontGenerated,
@@ -57,37 +57,27 @@ export default function FontGeneratorPanel({
 
     setGenerating(true);
     try {
-      const formData = new FormData();
-      formData.append('reference_image', referenceImage);
-      formData.append('style_description', styleDescription);
-      formData.append('project_id', String(projectId));
+      // 后端字体生成已改为「文字 + 风格名」JSON 契约(不吃参考图);此旧面板保留兼容,以风格描述作为生成文字。
+      // 画布内新版入口见 FontComposer(走同一后端 /font-generate)。
+      const result = await api.font.generate({
+        text: styleDescription.trim(),
+        style_name: styleDescription.trim() || undefined,
+        width: 1024,
+        height: 1024,
+      });
 
-      const result = await api.font.generate(formData);
-      
-      // Add to my fonts list
-      const newFont: FontItem = {
-        id: result.font_id || `font_${Date.now()}`,
-        name: result.font_name || '未命名字体',
-        style_description: styleDescription,
-        sample_url: result.sample_url,
-        created_at: new Date().toISOString(),
-        status: 'complete',
-      };
-      
-      setMyFonts([newFont, ...myFonts]);
-      
-      // Callback to add to canvas
-      if (onFontGenerated) {
-        onFontGenerated(result);
-      }
+      if (onFontGenerated) onFontGenerated(result);
+
+      // 后端同步执行,结果落 history → 刷新「我的字体」即可见
+      await loadMyFonts();
 
       // Reset form
       setReferenceImage(null);
       setReferencePreview('');
       setStyleDescription('');
       setActiveTab('my-fonts');
-      
-      alert('字体生成成功！');
+
+      alert('字体生成已提交,请在「我的字体」查看');
     } catch (error: any) {
       console.error('Font generation failed:', error);
       alert(error?.response?.data?.detail || '字体生成失败，请稍后重试');
@@ -98,8 +88,17 @@ export default function FontGeneratorPanel({
 
   const loadMyFonts = async () => {
     try {
-      const data = await api.font.list(projectId);
-      setMyFonts(data.fonts || []);
+      const data = await api.font.history({ page: 1, page_size: 50 });
+      const mapStatus = (s: string): FontItem['status'] =>
+        s === 'completed' ? 'complete' : s === 'failed' ? 'error' : s === 'processing' ? 'generating' : 'pending';
+      setMyFonts((data?.items || []).map((it: { task_id: string; text: string; style_name?: string | null; image_url?: string | null; created_at: string; status: string }) => ({
+        id: it.task_id,
+        name: it.text,
+        style_description: it.style_name || '',
+        sample_url: it.image_url || undefined,
+        created_at: it.created_at,
+        status: mapStatus(it.status),
+      })));
     } catch (error) {
       console.error('Failed to load fonts:', error);
     }

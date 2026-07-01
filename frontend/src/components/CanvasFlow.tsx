@@ -38,6 +38,7 @@ import { getStroke, getSvgPathFromStroke, strokeOptions } from '../canvas/freeha
 import ImageActionBar from './canvas/ImageActionBar';
 import CanvasToolbarDock from './canvas/CanvasToolbarDock';
 import GeneratorComposer, { type GenerateParams } from './canvas/GeneratorComposer';
+import FontComposer, { type FontParams } from './canvas/FontComposer';
 import HelperLinesOverlay from './canvas/HelperLinesOverlay';
 import CanvasPropertyPanel, { type PropertyPanelKind } from './canvas/CanvasPropertyPanel';
 import EditableRelationEdge from './canvas/EditableRelationEdge';
@@ -143,6 +144,8 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   // AI 图/视频「撰写浮窗」:{kind} 为打开、null 为关闭(替代原先往画布丢生成节点);genBusy=生成中(令顶部进度提示不自动消失)。
   const [genComposer, setGenComposer] = useState<{ kind: 'image' | 'video' } | null>(null);
   const [genBusy, setGenBusy] = useState(false);
+  // AI 字体生成器撰写浮窗开关(点工具栏 ai-text 打开;点「生成」才调后端,关闭零落地)。
+  const [fontComposer, setFontComposer] = useState(false);
   const { getNodes, getEdges, getViewport, screenToFlowPosition, fitView } = useReactFlow();
   // 对齐吸附:拖拽中显示的参考线(绝对流坐标);拖拽结束清空。
   const [helperLines, setHelperLines] = useState<{ vertical?: number; horizontal?: number }>({});
@@ -854,6 +857,49 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     setGenComposer({ kind });
   }, []);
 
+  // AI 字体生成器:撰写浮窗点「生成」→ 调后端(同步执行~16s,响应不含图 URL)→ 查 history 按 task_id 取图 →
+  // 落当前视口中心(sourced /uploads/generated/*.png,可持久)。尺寸固定 1024²(gpt-image-2 最小像素预算要求)。
+  const runFontGen = useCallback(async (params: FontParams) => {
+    setFontComposer(false);
+    const text = params.text.trim();
+    if (!text) return;
+    setGenBusy(true);
+    setCanvasNotice({ kind: 'info', text: '正在生成字体(约 15 秒)…' });
+    const stageEl = document.querySelector('[data-flow-canvas-stage]') as HTMLElement | null;
+    const rect = stageEl?.getBoundingClientRect();
+    const center = rect
+      ? screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+      : { x: 200, y: 200 };
+    const size = 340;
+    try {
+      const res = await api.font.generate({ text, style_name: params.style_name, width: 1024, height: 1024 }) as { task_id?: string; status?: string };
+      const taskId = res?.task_id;
+      // POST 已阻塞到完成,一般查一次 history 即得;仍留小轮询兜底(万一后端改真异步)。
+      let item: { image_url?: string; status?: string; error_message?: string } | undefined;
+      for (let i = 0; i < 6; i += 1) {
+        const hist = await api.font.history({ page: 1, page_size: 20 }) as { items?: Array<{ task_id?: string; image_url?: string; status?: string; error_message?: string }> };
+        item = (hist?.items || []).find((it) => it.task_id === taskId);
+        if (item && (item.status === 'completed' || item.status === 'failed')) break;
+        await new Promise((r) => window.setTimeout(r, 1500));
+      }
+      if (item?.status === 'completed' && item.image_url) {
+        const id = `font_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+        const el = { id, type: 'image', label: `字体·${text.slice(0, 8)}`, x: center.x - size / 2, y: center.y - size / 2, width: size, height: size, thumbnail_url: item.image_url, asset_ref: { type: 'image', url: item.image_url }, metadata: { source: 'font-gen', font_text: text, font_style: params.style_name } };
+        const next = upsertFlowCanvasNode(getNodes() as typeof nodes, el as never) as typeof nodes;
+        commit({ nodes: next });
+        setCanvasNotice({ kind: 'info', text: '字体已生成并加入画布' });
+      } else {
+        const err = String(item?.error_message || '');
+        const quota = /quota|额度/.test(err);
+        setCanvasNotice({ kind: 'warn', text: quota ? '字体生成失败:图片额度不足,请充值后重试' : '字体生成失败,请稍后重试' });
+      }
+    } catch {
+      setCanvasNotice({ kind: 'warn', text: '字体生成失败,请稍后重试' });
+    } finally {
+      setGenBusy(false);
+    }
+  }, [getNodes, commit, screenToFlowPosition]);
+
   // 尺寸预设:在当前视口中心落一个预设尺寸的画板(走 commit,持久 + 可撤销);不经拖拽层。
   const dropPresetFrame = useCallback((action: string) => {
     const preset = FRAME_PRESETS[action];
@@ -880,6 +926,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     if (action === 'upload-video') { setPendingTool(null); openImport('video/*'); return; }
     if (action === 'ai-image') { openGenComposer('image'); return; }
     if (action === 'ai-video') { openGenComposer('video'); return; }
+    if (action === 'ai-text') { setPendingTool(null); setFontComposer(true); return; }
     // 画笔:进入持续绘制模式(覆盖层),双击/换工具退出;模式与颜色/笔宽由属性面板呈现
     if (action === 'pen') { setPendingTool('pen'); return; }
     // 标记:点状批注,点击放置;文字/画板/图形:拖拽创建(覆盖层有自带提示,不再弹 toast)
@@ -1201,6 +1248,13 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
               kind={genComposer.kind}
               onGenerate={(params) => { void runGenComposer(genComposer.kind, params); }}
               onClose={() => setGenComposer(null)}
+            />
+          )}
+          {/* AI 字体生成器撰写浮窗:点「生成」才调后端并落视口中心,关闭零落地 */}
+          {fontComposer && (
+            <FontComposer
+              onGenerate={(params) => { void runFontGen(params); }}
+              onClose={() => setFontComposer(false)}
             />
           )}
           {pendingTool === 'pen' && (

@@ -419,14 +419,12 @@ export const api = {
       client.get(`/projects/${projectId}/canvas-assets`, { params }).then(r => r.data),
   },
 
-  // Font Generation APIs
+  // Font Generation APIs(对齐后端 font_generation_routes:JSON body,同步执行~16s,响应不含图 URL → 需查 history 取)
   font: {
-    generate: (formData: FormData) =>
-      client.post('/font/generate', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      }).then(r => r.data),
-    list: (projectId: number) =>
-      client.get(`/font/list/${projectId}`).then(r => r.data),
+    generate: (payload: { text: string; style_name?: string; provider?: 'mige' | 'zi2zi'; width?: number; height?: number }) =>
+      client.post('/font-generate', payload).then(r => r.data),
+    history: (params?: { page?: number; page_size?: number; status?: string }) =>
+      client.get('/font-history', { params }).then(r => r.data),
   },
 };
 
