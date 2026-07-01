@@ -14,7 +14,7 @@ class VisualAsset(Base):
     __tablename__ = "visual_assets"
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
     brief_id = Column(Integer, ForeignKey("product_briefs.id"), nullable=True)
 
     asset_plan_json = Column(Text, nullable=False)

@@ -7,7 +7,7 @@ from app.db.session import Base
 class BrandProfile(Base):
     __tablename__ = 'brand_profiles'
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey('projects.id'), nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey('projects.id', ondelete="CASCADE"), nullable=True, index=True)
     tenant_id = Column(Integer, index=True, nullable=True)
     is_canonical = Column(Boolean, server_default=text("false"), nullable=False)
     name = Column(String(200), nullable=False)
