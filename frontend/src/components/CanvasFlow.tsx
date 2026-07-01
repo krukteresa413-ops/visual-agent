@@ -18,6 +18,7 @@ import {
 import { api } from '../api/client';
 import { flowToLegacyCanvas, legacyToFlowCanvas, upsertFlowCanvasNode } from '../canvas/canvasAdapters';
 import { absolutePosition, orderByParent, resolveContainment } from '../canvas/frameNesting';
+import { getHelperLines } from '../canvas/helperLines';
 import { useCanvasPersistence } from '../canvas/useCanvasPersistence';
 import { useCanvasHistory } from '../canvas/useCanvasHistory';
 import { buildSelectionContext, type SelectionContextItem } from '../canvas/selectionContext';
@@ -34,6 +35,7 @@ import DragCreateLayer from './canvas/DragCreateLayer';
 import { getStroke, getSvgPathFromStroke, strokeOptions } from '../canvas/freehand';
 import ImageActionBar from './canvas/ImageActionBar';
 import CanvasToolbar from './canvas/CanvasToolbar';
+import HelperLinesOverlay from './canvas/HelperLinesOverlay';
 import CanvasPropertyPanel, { type PropertyPanelKind } from './canvas/CanvasPropertyPanel';
 import EditableRelationEdge from './canvas/EditableRelationEdge';
 import { actionBarAnchor } from './canvas/actionBarAnchor';
@@ -49,6 +51,9 @@ const emptyFlow: FlowCanvasState = {
 
 // 选中后弹属性面板的节点类型(RF node.type);其余类型(image/generator/frame/mark)不弹。
 const NODE_PANEL_KINDS = new Set(['text', 'shape', 'freedraw']);
+
+// 对齐吸附阈值(屏幕像素)。转流坐标时按 SNAP_PX / zoom,保证任意缩放下手感恒定。
+const SNAP_PX = 6;
 
 // 工具栏「快速图形」下拉 action → ShapeNode 形状种类
 const SHAPE_MAP: Record<string, string> = {
@@ -123,7 +128,9 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   const [reeditText, setReeditText] = useState('');
   const [reeditBusy, setReeditBusy] = useState(false);
   const [canvasNotice, setCanvasNotice] = useState<{ kind: 'info' | 'warn'; text: string } | null>(null);
-  const { getNodes, getEdges, getViewport, screenToFlowPosition } = useReactFlow();
+  const { getNodes, getEdges, getViewport, screenToFlowPosition, fitView } = useReactFlow();
+  // 对齐吸附:拖拽中显示的参考线(绝对流坐标);拖拽结束清空。
+  const [helperLines, setHelperLines] = useState<{ vertical?: number; horizontal?: number }>({});
   const { saveCanvas, rememberSavedCanvas } = useCanvasPersistence(projectId);
 
   // L0 编辑器地基:统一提交层 + 撤销/重做。所有「语义操作完成」点都走 commit(更新 state + 入撤销栈 + 持久化);
@@ -292,10 +299,72 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   }, [commit, getEdges, makeEditableRelationEdges]);
 
 
-  // 拖拽落定:拖进画板自动归属(绝对→相对父)、拖出自动脱离(相对→绝对),再按「父在子前」
-  // 重排(React Flow 约束),最后整图保存。画板本身不被归属(resolveContainment 内已挡)。
+  // 对齐吸附核心:给定被拖拽节点 id 与它「新的相对坐标」,在其他节点(绝对坐标)里找对齐线。
+  // 相对↔绝对换算在此处理(getHelperLines 只做纯几何);排除自身与自身子节点(拖画板不吸自己的子元素)。
+  // 返回吸附后的相对坐标(未命中为 undefined)+ 参考线绝对坐标。
+  const computeSnap = useCallback((id: string, relPos: { x: number; y: number }, distance: number): {
+    position?: { x: number; y: number }; vertical?: number; horizontal?: number;
+  } => {
+    const all = getNodes() as typeof nodes;
+    const moving = all.find((n) => n.id === id);
+    if (!moving) return {};
+    const parent = moving.parentId ? all.find((n) => n.id === moving.parentId) : undefined;
+    const parentPos = parent ? parent.position : { x: 0, y: 0 };
+    const sizeOf = (n: (typeof all)[number]) => ({
+      w: Number((n.data as { width?: number })?.width ?? n.width ?? 0),
+      h: Number((n.data as { height?: number })?.height ?? n.height ?? 0),
+    });
+    const mSize = sizeOf(moving);
+    const dragged = { x: parentPos.x + relPos.x, y: parentPos.y + relPos.y, width: mSize.w, height: mSize.h };
+    const others = all
+      .filter((n) => n.id !== id && n.parentId !== id)
+      .map((n) => {
+        const abs = absolutePosition(n, all);
+        const s = sizeOf(n);
+        return { x: abs.x, y: abs.y, width: s.w, height: s.h };
+      })
+      .filter((r) => r.width > 0 && r.height > 0);
+    const { snapX, snapY, vertical, horizontal } = getHelperLines(dragged, others, distance);
+    const position = (snapX !== undefined || snapY !== undefined)
+      ? { x: (snapX ?? dragged.x) - parentPos.x, y: (snapY ?? dragged.y) - parentPos.y }
+      : undefined;
+    return { position, vertical, horizontal };
+  }, [getNodes]);
+
+  // 包一层 onNodesChange:单节点拖拽时做对齐吸附(就地改写位置变更)+ 显示参考线;
+  // 多选/缩放不吸附,释放时清参考线。最终落定位置由 noteDragStop 权威吸附并 commit,
+  // 此处只负责拖拽中的实时手感与参考线。
+  const handleNodesChange = useCallback<typeof onNodesChange>((changes) => {
+    // 只认「拖拽手势」的位置变更(dragging 有明确 true/false);缩放 resize 的位置变更无 dragging,借此排除,避免误吸。
+    const drag = changes.filter((c) => c.type === 'position' && !!c.position && (c.dragging === true || c.dragging === false));
+    if (drag.length === 1) {
+      const ch = drag[0];
+      if (ch.type === 'position' && ch.position) {
+        const distance = SNAP_PX / (getViewport().zoom || 1);
+        const snap = computeSnap(ch.id, ch.position, distance);
+        // true/false 两帧都吸附(保证落定位置=吸附后,不依赖 onNodesChange 与 onNodeDragStop 的先后);仅拖拽中显参考线。
+        if (snap.position) ch.position = snap.position;
+        if (ch.dragging) setHelperLines({ vertical: snap.vertical, horizontal: snap.horizontal });
+        else setHelperLines((prev) => (prev.vertical === undefined && prev.horizontal === undefined ? prev : {}));
+      }
+    } else {
+      setHelperLines((prev) => (prev.vertical === undefined && prev.horizontal === undefined ? prev : {}));
+    }
+    onNodesChange(changes);
+  }, [computeSnap, getViewport, onNodesChange]);
+
+  // 拖拽落定:先对被拖拽节点做一次权威吸附(保证持久化位置=吸附后),清参考线;再拖进画板自动归属
+  // (绝对→相对父)、拖出自动脱离(相对→绝对),按「父在子前」重排(React Flow 约束),最后整图保存。
   const noteDragStop = useCallback((_e: MouseEvent | TouchEvent, node: Node) => {
-    const all = getNodes();
+    setHelperLines((prev) => (prev.vertical === undefined && prev.horizontal === undefined ? prev : {}));
+    // 权威吸附:用落定的相对坐标算一次吸附,写回被拖拽节点,保证「持久化位置 = 吸附后位置」。
+    // 仅单节点拖拽时吸附:多选整组拖动时,只吸「被抓的那个」会让它相对整组偏移、破坏组内相对布局,故跳过。
+    const distance = SNAP_PX / (getViewport().zoom || 1);
+    const selectedCount = (getNodes() as typeof nodes).filter((n) => n.selected).length;
+    const snap = (node && selectedCount <= 1) ? computeSnap(node.id, node.position, distance) : {};
+    const all = snap.position
+      ? (getNodes() as typeof nodes).map((n) => (n.id === node.id ? { ...n, position: snap.position as { x: number; y: number } } : n))
+      : (getNodes() as typeof nodes);
     const boxes = all.map((n) => ({
       id: n.id,
       type: String(n.type ?? ''),
@@ -314,7 +383,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
       return;
     }
     commit({ nodes: all as typeof nodes });
-  }, [commit, getNodes]);
+  }, [commit, getNodes, computeSnap, getViewport]);
 
   const noteMoveEnd = useCallback((_: unknown, viewport: Viewport) => {
 void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
@@ -787,7 +856,16 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
     commit({ nodes: next });
   }, [getNodes, commit]);
 
+  // 适应视图 / 缩放到选区:有选中则缩放到选区,否则适应全部。命令式 fitView(不写 fitView 的 prop 字面量,
+  // 以契合结构契约测试)。maxZoom 限制避免单个小节点被放到过大。
+  const handleFit = useCallback(() => {
+    const sel = (getNodes() as typeof nodes).filter((n) => n.selected);
+    if (sel.length) fitView({ nodes: sel.map((n) => ({ id: n.id })), padding: 0.25, duration: 220, maxZoom: 1.5 });
+    else fitView({ padding: 0.2, duration: 220 });
+  }, [fitView, getNodes]);
+
   // L0:画布级键盘快捷键 — Undo/Redo、V/H 切选择/移动、Delete 删除选中、Esc 退出放置。
+  // L1:Shift+1 适应全部 / Shift+2 缩放到选区(用 e.code 判数字键,避开 Shift 改字符的问题)。
   // 在 input/textarea/contentEditable 编辑时只放行 Undo/Redo,其余画布键不拦截(避免打字误删节点)。
   useEffect(() => {
     const isEditing = (t: EventTarget | null) => {
@@ -803,13 +881,15 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       if (meta && (e.key === 'd' || e.key === 'D')) { if (isEditing(e.target)) return; e.preventDefault(); duplicateSelection(); return; }
       if (e.key === 'Escape') { setPendingTool(null); return; }
       if (meta || isEditing(e.target)) return;
+      if (e.shiftKey && e.code === 'Digit1') { e.preventDefault(); fitView({ padding: 0.2, duration: 220 }); return; }
+      if (e.shiftKey && e.code === 'Digit2') { e.preventDefault(); const sel = (getNodes() as typeof nodes).filter((n) => n.selected); if (sel.length) fitView({ nodes: sel.map((n) => ({ id: n.id })), padding: 0.25, duration: 220, maxZoom: 1.5 }); return; }
       if (e.key === 'v' || e.key === 'V') { setPendingTool(null); setToolMode('select'); return; }
       if (e.key === 'h' || e.key === 'H') { setPendingTool(null); setToolMode('move'); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleUndo, handleRedo, deleteSelected, copySelection, pasteClipboard, duplicateSelection]);
+  }, [handleUndo, handleRedo, deleteSelected, copySelection, pasteClipboard, duplicateSelection, fitView, getNodes]);
 
   // 选中单个 文字/图形/自由绘 节点时弹属性面板;实时从 nodes 取该节点
   // (selectedActionNode 是选中那刻的快照,改样式后会过时,故按 id 取最新)。
@@ -958,7 +1038,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
             edges={edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            onNodesChange={onNodesChange}
+            onNodesChange={handleNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeDragStop={noteDragStop}
@@ -981,6 +1061,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
             className="bg-[#f5f5f5]"
           >
             <Background gap={32} size={1} color="rgba(0,0,0,0.08)" />
+            <HelperLinesOverlay vertical={helperLines.vertical} horizontal={helperLines.horizontal} />
             <Controls position="bottom-right" showInteractive={false} />
             <MiniMap position="bottom-left" pannable zoomable nodeStrokeWidth={2} />
             <Panel position="top-left">
@@ -990,6 +1071,10 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
                 </button>
                 <button data-canvas-redo type="button" title="重做 (Ctrl+Shift+Z)" disabled={!canRedo} onClick={handleRedo} className="grid size-8 place-items-center rounded-lg text-[#2F3640] transition-colors hover:bg-[#F1F3F5] disabled:cursor-not-allowed disabled:opacity-30">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M15 7l5 5-5 5" /><path d="M20 12H9a5 5 0 0 0 0 10h1" /></svg>
+                </button>
+                <span className="mx-0.5 h-5 w-px bg-black/10" />
+                <button data-canvas-fit type="button" title="适应视图 (Shift+1) / 缩放到选区 (Shift+2)" onClick={handleFit} className="grid size-8 place-items-center rounded-lg text-[#2F3640] transition-colors hover:bg-[#F1F3F5]">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 9V5a1 1 0 0 1 1-1h4" /><path d="M20 9V5a1 1 0 0 0-1-1h-4" /><path d="M4 15v4a1 1 0 0 0 1 1h4" /><path d="M20 15v4a1 1 0 0 1-1 1h-4" /></svg>
                 </button>
               </div>
             </Panel>
