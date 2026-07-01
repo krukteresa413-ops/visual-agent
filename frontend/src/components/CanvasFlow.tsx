@@ -45,7 +45,7 @@ import EditableRelationEdge from './canvas/EditableRelationEdge';
 import { actionBarAnchor } from './canvas/actionBarAnchor';
 import type CanvasViewLegacy from './CanvasViewLegacy';
 
-type CanvasFlowProps = React.ComponentProps<typeof CanvasViewLegacy>;
+type CanvasFlowProps = React.ComponentProps<typeof CanvasViewLegacy> & { canvasId?: number };
 
 const emptyFlow: FlowCanvasState = {
   nodes: [],
@@ -123,6 +123,7 @@ function focusContentEditable(nodeId: string) {
 
 function CanvasFlowInner(props: CanvasFlowProps) {
   const projectId = props.projectId || 2;
+  const canvasId = props.canvasId;  // Phase C: 未定=项目默认画布(后端 resolve)
   const nodeTypes = useMemo(() => ({ canvasElement: AssetNode, generator: GeneratorNode, shape: ShapeNode, text: TextNode, mark: MarkNode, freedraw: FreedrawNode, frame: FrameNode }), []);
   const edgeTypes = useMemo(() => ({ editableRelation: EditableRelationEdge }), []);
   const [nodes, setNodes, onNodesChange] = useNodesState(emptyFlow.nodes);
@@ -151,7 +152,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
   const [helperLines, setHelperLines] = useState<{ vertical?: number; horizontal?: number }>({});
   // 拖入高亮:拖动中被拖节点会归属到的目标画板 id(经 Context 下发给 FrameNode);非拖动/未命中为 null。
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  const { saveCanvas, rememberSavedCanvas } = useCanvasPersistence(projectId);
+  const { saveCanvas, rememberSavedCanvas } = useCanvasPersistence(projectId, canvasId);
 
   // L0 编辑器地基:统一提交层 + 撤销/重做。所有「语义操作完成」点都走 commit(更新 state + 入撤销栈 + 持久化);
   // Undo/Redo 直接还原快照(绕过 commit,故撤销动作本身不会再被记进历史)。快照存 React Flow 运行时引用,
@@ -257,7 +258,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
     setLoading(true);
     setLoadError(false);
 
-    api.atelierCanvas.getState(projectId).then(data => {
+    api.atelierCanvas.getState(projectId, canvasId).then(data => {
       if (cancelled) return;
       const legacy: LegacyCanvasState = data?.elements?.length
         ? {
@@ -265,7 +266,10 @@ function CanvasFlowInner(props: CanvasFlowProps) {
             connections: data.connections || [],
             viewport: data.viewport || { x: 0, y: 0, scale: 1 },
           }
-        : buildFallbackState(props);
+        : (canvasId
+            // 已选定具体画布(非默认): 空即空白, 不拿生成结果回填(否则每张新画布都显示旧结果)
+            ? { elements: [], connections: [], viewport: { x: 0, y: 0, scale: 1 } }
+            : buildFallbackState(props));
       const flow = legacyToFlowCanvas(legacy);
       setNodes(flow.nodes);
       setEdges(makeEditableRelationEdges(flow.edges));
@@ -286,7 +290,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
     });
 
     return () => { cancelled = true; };
-  }, [makeEditableRelationEdges, projectId, resetHistory]);
+  }, [makeEditableRelationEdges, projectId, canvasId, resetHistory]);
 
   //  on refresh nonce, re-fetch canvas state and merge new nodes
   const initialCanvasNonceRef = useRef(true);
@@ -298,7 +302,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
     }
     if (!canvasRefreshNonce) return;
     let cancelled = false;
-    api.atelierCanvas.getState(projectId).then(data => {
+    api.atelierCanvas.getState(projectId, canvasId).then(data => {
       if (cancelled || !data?.elements?.length) return;
       setNodes(current => {
         const existingIds = new Set(current.map(node => String(node.data?.legacy_id || node.id)));
@@ -311,7 +315,7 @@ function CanvasFlowInner(props: CanvasFlowProps) {
       });
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [canvasRefreshNonce, projectId, setNodes]);
+  }, [canvasRefreshNonce, projectId, canvasId, setNodes]);
 
   const onConnect = useCallback((connection: Connection) => {
     const nextEdges = makeEditableRelationEdges(addEdge(connection, getEdges() as typeof edges));
@@ -550,7 +554,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
         let landed = false;
         for (let i = 0; i < 20; i += 1) {
           await new Promise((r) => window.setTimeout(r, 6000));
-          const data = await api.atelierCanvas.getState(projectId);
+          const data = await api.atelierCanvas.getState(projectId, canvasId);
           const fresh = (data?.elements || []).filter((el: { id: string }) => !before.has(String(el.id)));
           if (fresh.length) {
             setNodes((current) => { let next = current; for (const el of fresh) next = upsertFlowCanvasNode(next, el) as typeof current; return next; });
@@ -715,7 +719,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
           action: 'cutout',
           image_url: url,
         });
-        const data = await api.atelierCanvas.getState(projectId);
+        const data = await api.atelierCanvas.getState(projectId, canvasId);
         if (data?.elements?.length) {
           setNodes((current) => {
             const ids = new Set(current.map((n) => String(n.data?.legacy_id || n.id)));
@@ -830,7 +834,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       const rounds = isVideo ? 25 : 16;
       for (let i = 0; i < rounds; i += 1) {
         await new Promise((r) => window.setTimeout(r, isVideo ? 6000 : 3000));
-        const data = await api.atelierCanvas.getState(projectId);
+        const data = await api.atelierCanvas.getState(projectId, canvasId);
         const fresh = (data?.elements || []).filter((el: { id: string }) => !before.has(String(el.id)));
         if (!fresh.length) continue;
         const [first, ...rest] = fresh;

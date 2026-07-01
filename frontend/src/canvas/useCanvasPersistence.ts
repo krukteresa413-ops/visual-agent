@@ -12,7 +12,7 @@ interface SaveCanvasArgs {
   viewport: Viewport;
 }
 
-export function useCanvasPersistence(projectId: number) {
+export function useCanvasPersistence(projectId: number, canvasId?: number) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const lastPayloadRef = useRef('');
 
@@ -26,7 +26,7 @@ export function useCanvasPersistence(projectId: number) {
 
     setSaveStatus('saving');
     try {
-      await api.atelierCanvas.saveState(projectId, legacy as unknown as Record<string, unknown>);
+      await api.atelierCanvas.saveState(projectId, legacy as unknown as Record<string, unknown>, canvasId);
       lastPayloadRef.current = payload;
       setSaveStatus('saved');
       return legacy;
@@ -34,7 +34,7 @@ export function useCanvasPersistence(projectId: number) {
       setSaveStatus('error');
       throw error;
     }
-  }, [projectId]);
+  }, [projectId, canvasId]);
 
   const rememberSavedCanvas = useCallback(({ nodes, edges, viewport }: SaveCanvasArgs) => {
     lastPayloadRef.current = JSON.stringify(flowToLegacyCanvas({ nodes, edges, viewport }));

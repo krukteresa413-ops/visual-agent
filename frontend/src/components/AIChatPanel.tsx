@@ -78,6 +78,7 @@ interface Props {
   /** 对话(Agent)路径出图后,通知父级刷新无限画布(图二:对话生成同步上画布) */
   onCanvasShouldRefresh?: () => void;
   projectId?: number;
+  canvasId?: number;
   projectName?: string;
   chatAssetContext?: ChatAssetContext | null;
 }
@@ -95,7 +96,7 @@ function isVideoIntent(text: string): boolean {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onProgressUpdate, skillPromptSelected, onSkillPromptConsumed, onTaskStarted, onGenerationComplete, onCanvasShouldRefresh, projectId, chatAssetContext }: Props) {
+export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onProgressUpdate, skillPromptSelected, onSkillPromptConsumed, onTaskStarted, onGenerationComplete, onCanvasShouldRefresh, projectId, canvasId, chatAssetContext }: Props) {
   const [chatState, dispatch] = useReducer(chatReducer, initialChatState);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -146,7 +147,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.chat.getHistory(projectId);
+        const res = await api.chat.getHistory(projectId, canvasId);
         const msgs = (res?.messages || []) as unknown[];
         if (!cancelled && msgs.length) {
           dispatch({ type: 'hydrate', messages: msgs as never });
@@ -159,9 +160,9 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
       }
     })();
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, canvasId]);
 
-  // 图三: 一轮对话结束(完成/出错)时, 保存整段会话快照(租户+项目维度)
+  // 图三: 一轮对话结束(完成/出错)时, 保存整段会话快照(canvas 维度)
   useEffect(() => {
     if (!projectId || !historyLoadedRef.current) return;
     if (chatState.phase !== 'completed' && chatState.phase !== 'error') return;
@@ -169,8 +170,8 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     const snapshot = JSON.stringify(chatState.messages);
     if (snapshot === lastSavedRef.current) return;
     lastSavedRef.current = snapshot;
-    api.chat.saveHistory(projectId, chatState.messages).catch(() => { /* 保存失败不阻断对话 */ });
-  }, [chatState.phase, chatState.messages, projectId]);
+    api.chat.saveHistory(projectId, chatState.messages, canvasId).catch(() => { /* 保存失败不阻断对话 */ });
+  }, [chatState.phase, chatState.messages, projectId, canvasId]);
 
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -239,7 +240,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: promptWithContext, reference_image_url: refUrl, project_id: projectId }),
+        body: JSON.stringify({ message: promptWithContext, reference_image_url: refUrl, project_id: projectId, canvas_id: canvasId }),
       });
       if (!response.ok || !response.body) throw new Error('对话服务暂不可用');
       const reader = response.body.getReader();
@@ -506,7 +507,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
     const m: AgentMode = cat === '视频' ? 'video-gen' : 'image-gen';
     const pid = projectId ?? 2;
     const pickUrl = (it: any): string | undefined => it?.url || it?.image_url || it?.preview_url || it?.thumbnail_url || it?.asset_ref?.url;
-    Promise.allSettled([api.atelierCanvas.getAssets(pid), api.atelierCanvas.getState(pid)])
+    Promise.allSettled([api.atelierCanvas.getAssets(pid), api.atelierCanvas.getState(pid, canvasId)])
       .then((results) => {
         const urls: string[] = [];
         if (results[0].status === 'fulfilled') { const resp: any = results[0].value; const items = Array.isArray(resp) ? resp : (resp?.assets || resp?.elements || resp?.images || []); for (const it of items as any[]) { const u = pickUrl(it); if (u) urls.push(u); } }
@@ -913,7 +914,7 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
                     const pickUrl = (it: any): string | undefined =>
                       it?.url || it?.image_url || it?.preview_url || it?.thumbnail_url || it?.asset_ref?.url;
                     // 图一:资产库 + 画布状态(对话生成的图 seed 在 canvas-state elements)双来源合并
-                    Promise.allSettled([api.atelierCanvas.getAssets(pid), api.atelierCanvas.getState(pid)])
+                    Promise.allSettled([api.atelierCanvas.getAssets(pid), api.atelierCanvas.getState(pid, canvasId)])
                       .then((results) => {
                         const urls: string[] = [];
                         if (results[0].status === 'fulfilled') {

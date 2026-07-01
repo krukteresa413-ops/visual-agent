@@ -1,7 +1,7 @@
 """
 CanvasState ORM model for Atelier Flow infinite canvas.
 Stores elements, connections, and viewport state as JSON columns.
-One row per project.
+One row per canvas (Phase C.2: canvas_id 为权威键; project_id 保留为冗余/回退, 已去唯一)。
 """
 from datetime import datetime
 from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey
@@ -14,13 +14,12 @@ class CanvasState(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(
         Integer, ForeignKey("projects.id", ondelete="CASCADE"),
-        nullable=False, unique=True, index=True,
+        nullable=False, index=True,
     )
-    # Phase C: 画布归属。canvas_id 为权威键;project_id 保留为冗余/回退。
-    # C.1 加法期为可空(已回填);C.2 再收紧为 NOT NULL + UNIQUE,并去掉 project_id 的 unique。
+    # Phase C.2: canvas_id 为权威键(NOT NULL + UNIQUE); project_id 去唯一, 仅作冗余/回退。
     canvas_id = Column(
         Integer, ForeignKey("canvases.id", ondelete="CASCADE"),
-        nullable=True, index=True,
+        nullable=False, unique=True, index=True,
     )
 
     # JSON arrays: [{id, type, label, x, y, width, height, rotation, zIndex, hidden, locked, editableLayers, thumbnail_url, ...}]

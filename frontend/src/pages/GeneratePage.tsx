@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useParams, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, generateAll, exportMarkdown, saveBrief, getProjectBrief } from '../api/client';
 import type { ProductBrief, VisualAssetPlan } from '../types';
 import BriefForm from '../components/BriefForm';
@@ -27,6 +27,9 @@ const DF: ProductBrief = { product_name:'', category:'', specifications:[], sell
 export default function GeneratePage() {
   const { projectId } = useParams<{projectId:string}>();
   const pid = Number(projectId) || 2;
+  // Phase C: 当前画布 = ?canvas= query(缺省=项目默认画布, 由后端 resolve)。同项目切画布走 SPA。
+  const [searchParams, setSearchParams] = useSearchParams();
+  const canvasId = Number(searchParams.get('canvas')) || undefined;
   const [brief, setBrief] = useState<ProductBrief>(DF);
   const [result, setResult] = useState<VisualAssetPlan | null>(null);
   const [images, setImages] = useState<any>(null);
@@ -78,6 +81,75 @@ export default function GeneratePage() {
   // Phase P: 项目切换器 — 全量项目列表(复用 api.projects.list),顶栏下拉切换
   const { data: projects } = useQuery({ queryKey: ['projects', 'list'], queryFn: () => api.projects.list() });
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  // Phase C Step4: 当前项目的画布列表(二级菜单) + 画布/项目 增删改切
+  const queryClient = useQueryClient();
+  const { data: canvasList } = useQuery({ queryKey: ['canvases', pid], queryFn: () => api.canvases.list(pid) });
+  const canvasesByTimeDesc = [...(canvasList ?? [])].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  const defaultCanvasId = [...(canvasList ?? [])].sort((a, b) => (a.sort_order - b.sort_order) || (a.id - b.id))[0]?.id;
+  const effectiveCanvasId = canvasId ?? defaultCanvasId;   // 未指定 ?canvas= 时高亮项目默认画布
+  const fmtCanvasTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const p2 = (n) => String(n).padStart(2, '0');
+    return `${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  };
+  const switchCanvas = (id) => {
+    setProjectMenuOpen(false);
+    if (id === effectiveCanvasId) return;   // 同项目切画布走 SPA(?canvas=), brief 是 project 级不重载
+    setSearchParams({ canvas: String(id) });
+    setChatKey((k) => k + 1);
+  };
+  const createCanvas = async () => {
+    try {
+      const c = await api.canvases.create(pid);
+      await queryClient.invalidateQueries({ queryKey: ['canvases', pid] });
+      setProjectMenuOpen(false);
+      setSearchParams({ canvas: String(c.id) });
+      setChatKey((k) => k + 1);
+      toast('已新建画布', 'success');
+    } catch { toast('新建画布失败', 'error'); }
+  };
+  const renameCanvas = async (c) => {
+    const name = window.prompt('重命名画布', c.name);
+    if (name == null) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === c.name) return;
+    try {
+      await api.canvases.rename(c.id, trimmed);
+      await queryClient.invalidateQueries({ queryKey: ['canvases', pid] });
+    } catch { toast('重命名失败', 'error'); }
+  };
+  const deleteCanvas = async (c) => {
+    if (!window.confirm(`删除画布「${c.name}」？其画布内容与对话将一并删除，且不可恢复。`)) return;
+    try {
+      await api.canvases.remove(c.id);
+      await queryClient.invalidateQueries({ queryKey: ['canvases', pid] });
+      if (c.id === effectiveCanvasId) {   // 删的是当前画布 → 切到剩余默认
+        const remain = (canvasList ?? []).filter((x) => x.id !== c.id);
+        setSearchParams(remain[0] ? { canvas: String(remain[0].id) } : {});
+        setChatKey((k) => k + 1);
+      }
+      toast('画布已删除', 'success');
+    } catch (e) {
+      toast(e?.response?.data?.detail || '删除失败', 'error');   // 禁删最后一张 → 后端 400
+    }
+  };
+  const deleteProject = async (p, e) => {
+    e.preventDefault(); e.stopPropagation();
+    setProjectMenuOpen(false);
+    if (!window.confirm(`删除项目「${p.name?.trim() || '未命名项目'}」？其所有画布、对话、生成记录将一并删除，且不可恢复。`)) return;
+    try {
+      await api.projects.delete(p.id);
+      await queryClient.invalidateQueries({ queryKey: ['projects', 'list'] });
+      toast('项目已删除', 'success');
+      if (p.id === pid) {   // 删的是当前项目 → 跳到其它项目或全部项目页
+        const remain = (projects ?? []).filter((x) => x.id !== p.id);
+        if (remain[0]) window.location.assign(`/generate/${remain[0].id}`);
+        else navigate('/projects');
+      }
+    } catch { toast('删除项目失败', 'error'); }
+  };
   const [chatMenuOpen, setChatMenuOpen] = useState(false);   // 「新建对话」旁的 ⌄ 下拉
   const [chatKey, setChatKey] = useState(0);                 // 递增以 remount AIChatPanel = 重置对话
   const [lastRightPanel, setLastRightPanel] = useState<'chat' | 'library'>('chat'); // 收起前记住,展开时恢复
@@ -102,7 +174,7 @@ export default function GeneratePage() {
   const handleNewChat = async () => {
     setChatMenuOpen(false);
     if (!window.confirm('新建对话会清空当前对话记录（画布内容不受影响），确定继续吗？')) return;
-    try { await api.chat.saveHistory(pid, []); } catch { /* 清空失败不阻断,remount 后仍是新面板 */ }
+    try { await api.chat.saveHistory(pid, [], canvasId); } catch { /* 清空失败不阻断,remount 后仍是新面板 */ }
     setChatAssetContext(null);
     setGenTaskId(null);
     setIsGenerating(false);
@@ -427,15 +499,53 @@ export default function GeneratePage() {
                   )}
                   {(projects ?? []).map((p) => (
                     p.id === pid ? (
-                      <div key={p.id} className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${isLight ? 'bg-purple-50 text-purple-700' : 'bg-purple-500/15 text-purple-200'}`}>
-                        <span className="truncate font-medium">{p.name?.trim() || '未命名项目'}</span>
-                        <svg viewBox="0 0 24 24" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                      <div key={p.id}>
+                        {/* 当前项目行 + 删除 */}
+                        <div className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${isLight ? 'bg-purple-50 text-purple-700' : 'bg-purple-500/15 text-purple-200'}`}>
+                          <span className="truncate font-medium">{p.name?.trim() || '未命名项目'}</span>
+                          <div className="flex shrink-0 items-center gap-1">
+                            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                            <button onClick={(e) => deleteProject(p, e)} title="删除项目" className={`rounded p-0.5 ${isLight ? 'text-gray-400 hover:bg-red-50 hover:text-red-500' : 'text-gray-400 hover:bg-red-500/20 hover:text-red-400'}`}>
+                              <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6" /></svg>
+                            </button>
+                          </div>
+                        </div>
+                        {/* 二级菜单: 本项目的画布(时间降序) */}
+                        <div className={`px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>画布</div>
+                        {canvasesByTimeDesc.map((c) => (
+                          <div key={c.id} className={`flex items-center justify-between gap-1 rounded-md py-1.5 pl-6 pr-2 text-sm ${c.id === effectiveCanvasId ? (isLight ? 'bg-purple-50 text-purple-700' : 'bg-purple-500/15 text-purple-200') : panel.menuItem}`}>
+                            <button onClick={() => switchCanvas(c.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                              {c.id === effectiveCanvasId
+                                ? <svg viewBox="0 0 24 24" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                                : <span className="size-3.5 shrink-0" />}
+                              <span className="truncate">{c.name}</span>
+                              <span className={`shrink-0 text-[10px] ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>{fmtCanvasTime(c.created_at)}</span>
+                            </button>
+                            <div className="flex shrink-0 items-center gap-0.5">
+                              <button onClick={() => renameCanvas(c)} title="重命名画布" className={`rounded p-0.5 ${isLight ? 'text-gray-400 hover:bg-gray-200 hover:text-gray-700' : 'text-gray-400 hover:bg-white/10 hover:text-gray-100'}`}>
+                                <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+                              </button>
+                              <button onClick={() => deleteCanvas(c)} title="删除画布" className={`rounded p-0.5 ${isLight ? 'text-gray-400 hover:bg-red-50 hover:text-red-500' : 'text-gray-400 hover:bg-red-500/20 hover:text-red-400'}`}>
+                                <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6" /></svg>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        <button onClick={createCanvas} className={`flex w-full items-center gap-2 rounded-md py-1.5 pl-6 pr-3 text-sm ${panel.menuItem}`}>
+                          <span className="text-base leading-none">＋</span>新建画布
+                        </button>
+                        <div className={`my-1 border-t ${panel.headBorder}`} />
                       </div>
                     ) : (
-                      <a key={p.id} href={`/generate/${p.id}`} className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${panel.menuItem}`}>
-                        <span className="truncate">{p.name?.trim() || '未命名项目'}</span>
-                        {p.generation_count > 0 && <span className={`shrink-0 text-[11px] ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>{p.generation_count} 次</span>}
-                      </a>
+                      <div key={p.id} className="flex items-center gap-1">
+                        <a href={`/generate/${p.id}`} className={`flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-sm ${panel.menuItem}`}>
+                          <span className="truncate">{p.name?.trim() || '未命名项目'}</span>
+                          {p.generation_count > 0 && <span className={`shrink-0 text-[11px] ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>{p.generation_count} 次</span>}
+                        </a>
+                        <button onClick={(e) => deleteProject(p, e)} title="删除项目" className={`mr-1 shrink-0 rounded p-1 ${isLight ? 'text-gray-300 hover:bg-red-50 hover:text-red-500' : 'text-gray-500 hover:bg-red-500/20 hover:text-red-400'}`}>
+                          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6" /></svg>
+                        </button>
+                      </div>
                     )
                   ))}
                   <div className={`my-1 border-t ${panel.headBorder}`} />
@@ -688,6 +798,7 @@ export default function GeneratePage() {
                       isLight={isLight}
                       projectName={brief.product_name || '未命名'}
                       projectId={pid}
+                canvasId={canvasId}
                       chatAssetContext={chatAssetContext}
                       onTaskStarted={(taskId) => {
                         setGenTaskId(taskId);
@@ -727,6 +838,7 @@ export default function GeneratePage() {
               <CanvasView
                 isLight={isLight}
                 projectId={pid}
+                canvasId={canvasId}
                 canvasRefreshNonce={canvasRefreshNonce}
                 generationTaskId={genTaskId}
                 qualityReport={qualityReport}
@@ -769,6 +881,7 @@ export default function GeneratePage() {
               sellingPoints={result?.selling_points}
               videoScripts={result?.video_scripts}
               projectId={pid}
+              canvasId={canvasId}
               canvasRefreshNonce={canvasRefreshNonce}
               generationTaskId={genTaskId}
               qualityReport={qualityReport}
@@ -875,6 +988,7 @@ export default function GeneratePage() {
                   sellingPoints={result?.selling_points}
                   videoScripts={result?.video_scripts}
                   projectId={pid}
+                canvasId={canvasId}
                   canvasRefreshNonce={canvasRefreshNonce}
                   onAddToChat={addCanvasAssetToChat}
                   onEditPrompt={editPromptFromHistory}

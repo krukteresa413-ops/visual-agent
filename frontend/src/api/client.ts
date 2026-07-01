@@ -229,10 +229,10 @@ export const api = {
 
   // Chat (图三: 画布 AI 对话历史持久化, 租户隔离)
   chat: {
-    getHistory: (projectId: number) =>
-      client.get<{ messages: unknown[] }>('/chat/history', { params: { project_id: projectId } }).then(r => r.data),
-    saveHistory: (projectId: number, messages: unknown[]) =>
-      client.put<{ ok: boolean; count: number }>('/chat/history', { project_id: projectId, messages }).then(r => r.data),
+    getHistory: (projectId: number, canvasId?: number) =>
+      client.get<{ messages: unknown[] }>('/chat/history', { params: { project_id: projectId, ...(canvasId != null ? { canvas_id: canvasId } : {}) } }).then(r => r.data),
+    saveHistory: (projectId: number, messages: unknown[], canvasId?: number) =>
+      client.put<{ ok: boolean; count: number }>('/chat/history', { project_id: projectId, canvas_id: canvasId ?? null, messages }).then(r => r.data),
   },
 
   // 真·分享 (Phase S: 冻结快照 + 免登录只读 token 链接)
@@ -427,10 +427,10 @@ export const api = {
 
   // Atelier Flow Infinite Canvas APIs
   atelierCanvas: {
-    getState: (projectId: number) =>
-      client.get(`/projects/${projectId}/canvas-state`).then(r => r.data),
-    saveState: (projectId: number, payload: Record<string, unknown>) =>
-      client.put(`/projects/${projectId}/canvas-state`, payload).then(r => r.data),
+    getState: (projectId: number, canvasId?: number) =>
+      client.get(`/projects/${projectId}/canvas-state`, { params: canvasId != null ? { canvas_id: canvasId } : {} }).then(r => r.data),
+    saveState: (projectId: number, payload: Record<string, unknown>, canvasId?: number) =>
+      client.put(`/projects/${projectId}/canvas-state`, payload, { params: canvasId != null ? { canvas_id: canvasId } : {} }).then(r => r.data),
     getTimeline: (projectId: number) =>
       client.get(`/projects/${projectId}/timeline`).then(r => r.data),
     getAssets: (projectId: number, params?: Record<string, unknown>) =>
