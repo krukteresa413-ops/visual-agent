@@ -7,7 +7,7 @@ const source = fs.readFileSync(pagePath, 'utf8');
 
 describe('ProjectsPage center new canvas entry', () => {
   it('creates an empty project through the existing projects API before navigating to the canvas', () => {
-    expect(source).toContain("import { api } from '../api/client'");
+    expect(source).toContain("import { api, getToken } from '../api/client'");
     expect(source).toContain('const createEmptyCanvasProject = async () =>');
     expect(source).toContain("api.projects.create('未命名项目', '')");
     expect(source).toContain("navigate(`/generate/${project.id}`)");

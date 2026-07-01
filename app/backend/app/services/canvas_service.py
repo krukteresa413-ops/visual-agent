@@ -157,3 +157,15 @@ def assert_canvas_access(db: Session, canvas_id: int, user) -> Canvas:
     ):
         raise HTTPException(status_code=403, detail="forbidden")
     return canvas
+
+
+def assert_generation_access(db: Session, project_id: int, user, canvas_id: Optional[int] = None) -> None:
+    """生成/画布写入端点统一守卫(Phase C ② 安全 pass)。
+    项目须属当前租户; 若带 canvas_id, 该 canvas 须属当前租户且属于该 project。
+    供 quick-generate / orchestrate / generate-async / from-document / canvas-actions /
+    image-action / asset-modify 复用。缺省 canvas_id=None 时只校项目。"""
+    assert_project_access(db, project_id, user)
+    if canvas_id is not None:
+        canvas = assert_canvas_access(db, canvas_id, user)
+        if canvas.project_id != project_id:
+            raise HTTPException(status_code=404, detail="canvas not found in project")

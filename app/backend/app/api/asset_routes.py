@@ -8,9 +8,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.atelier_canvas_routes import get_db
+from app.models.auth import User
 from app.models.canvas_state import CanvasState
 from app.models.image_generation_model import ImageGenerationRequest
+from app.services.auth_service import get_current_user
 from app.services.brand_memory_learner import BrandMemoryLearner
+from app.services.canvas_service import assert_generation_access
 from app.services.image_generation_service import image_generation_service
 
 router = APIRouter(prefix="/api/v1/asset", tags=["asset-modify"])
@@ -142,8 +145,10 @@ async def _generate_image_version(req: ModifyRequest) -> dict:
 
 
 @router.post("/modify")
-async def modify_asset(req: ModifyRequest, db: Session = Depends(get_db)):
+async def modify_asset(req: ModifyRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """根据自然语言指令或 crop 操作修改素材内容。"""
+    if req.project_id is not None:
+        assert_generation_access(db, req.project_id, current_user, req.canvas_id)
     if not req.instruction.strip():
         return {"modified": req.original}
 

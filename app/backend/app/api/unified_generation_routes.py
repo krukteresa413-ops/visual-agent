@@ -1,8 +1,13 @@
 """Unified endpoint: upload document → parse → review → generate all 6 visual types."""
 import os, uuid, time, re, json as _json, asyncio, logging
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
+from app.db.session import get_db
+from app.models.auth import User
+from app.services.auth_service import get_current_user
+from app.services.canvas_service import assert_generation_access
 from app.services.document_parser import parse_document
 from app.services.text_prefilter import clean_pdf_text
 from app.services.brief_parser import parse_brief_text
@@ -475,7 +480,10 @@ async def generate_from_document(
     generate_images: bool = Form(False),
     generate_videos: bool = Form(False),
     prompt_template: str | None = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
+    assert_generation_access(db, project_id, current_user, canvas_id)
     if not file and not text and not parsed_brief_json:
         raise HTTPException(status_code=400, detail="请上传文件或输入产品文字")
 
@@ -766,8 +774,11 @@ async def generate_async(
     answers: str | None = Form(None),
     generate_images: bool = Form(False),
     generate_videos: bool = Form(False),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Async full generation: returns task_id immediately, poll for results."""
+    assert_generation_access(db, project_id, current_user, canvas_id)
     if not file and not text and not parsed_brief_json:
         raise HTTPException(status_code=400, detail="请上传文件或输入产品文字")
 
@@ -1001,7 +1012,7 @@ class QuickGenerateRequest(BaseModel):
 
 
 @router.post("/quick-generate")
-async def quick_generate(req: QuickGenerateRequest):
+async def quick_generate(req: QuickGenerateRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
     T5: 快速生成直达画布 — Plan A
     用户输入prompt，直接生成画布，跳过AI解析和手动填写字段。
@@ -1012,6 +1023,7 @@ async def quick_generate(req: QuickGenerateRequest):
     3. 直接调用generate_all生成六类素材
     4. 返回task_id，前端轮询结果
     """
+    assert_generation_access(db, req.project_id, current_user, req.canvas_id)
     if not req.prompt or not req.prompt.strip():
         raise HTTPException(status_code=400, detail="prompt不能为空")
 
@@ -1141,10 +1153,11 @@ class OrchestrateRequest(BaseModel):
 
 
 @router.post("/generate/orchestrate")
-async def generate_orchestrate(req: OrchestrateRequest):
+async def generate_orchestrate(req: OrchestrateRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """真·十 Agent 编排:PM→Research→Brand→Copy→Visual→Image→Layout→Mockup→Compliance→Export。
     每个 Agent 通过 GenerationTracker SSE 上报具名进度;图片/Mockup 产物落库到画布。返回 task_id 轮询。
     """
+    assert_generation_access(db, req.project_id, current_user, req.canvas_id)
     if not (req.prompt and req.prompt.strip()) and not req.brief:
         raise HTTPException(status_code=400, detail="请提供 prompt 或 brief")
 

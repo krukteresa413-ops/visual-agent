@@ -3,11 +3,15 @@ import hashlib
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, get_db
 from app.db.crud_visual_asset_v2 import save_asset_plan
+from app.models.auth import User
+from app.services.auth_service import get_current_user
+from app.services.canvas_service import assert_generation_access
 from app.models.image_generation_model import ImageGenerationRequest
 from app.services.generation_tracker import GenerationTracker
 from app.services.image_generation_service import image_generation_service
@@ -38,7 +42,8 @@ class CanvasActionRequest(BaseModel):
 
 
 @router.post("")
-async def start_canvas_action(req: CanvasActionRequest):
+async def start_canvas_action(req: CanvasActionRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    assert_generation_access(db, req.project_id, current_user)
     if not req.selection:
         raise HTTPException(status_code=400, detail="至少选择一个画布节点")
 

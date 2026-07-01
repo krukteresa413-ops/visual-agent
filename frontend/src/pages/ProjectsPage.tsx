@@ -9,7 +9,7 @@ import InspirationPanel from '../components/InspirationPanel';
 // Prevent Vite tree-shaking
 const _refInspirationPanel = InspirationPanel; void _refInspirationPanel;// Prevent tree-shaking
 import AuthPage from './AuthPage';
-import { api } from '../api/client';
+import { api, getToken } from '../api/client';
 
 
 const DIAMONDS = [
@@ -310,8 +310,10 @@ export default function ProjectsPage() {
     try {
       const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 120000);
+    const _token = getToken();
     const resp = await fetch('/api/v1/generate-from-document', {
       method: 'POST', body: formData, signal: controller.signal,
+      headers: _token ? { Authorization: `Bearer ${_token}` } : {},   // Phase C ②: 该 fetch 绕过 axios 拦截器,手动带 token
     });
     clearTimeout(timeoutId);
       if (!resp.ok) {

@@ -8,8 +8,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.atelier_canvas_routes import get_db
+from app.models.auth import User
 from app.models.canvas_state import CanvasState
+from app.services.auth_service import get_current_user
 from app.services.canvas_image_action_service import canvas_image_action_service
+from app.services.canvas_service import assert_generation_access
 
 router = APIRouter(prefix="/api/v1/canvas", tags=["canvas-image-actions"])
 
@@ -102,7 +105,8 @@ def _append_action_version(db: Session, req: CanvasImageActionRequest, result: d
 
 
 @router.post("/image-action")
-async def run_canvas_image_action(req: CanvasImageActionRequest, db: Session = Depends(get_db)):
+async def run_canvas_image_action(req: CanvasImageActionRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    assert_generation_access(db, req.project_id, current_user, req.canvas_id)
     instruction = req.instruction.strip() or ACTION_LABELS[req.action]
     try:
         result = await canvas_image_action_service.run(
