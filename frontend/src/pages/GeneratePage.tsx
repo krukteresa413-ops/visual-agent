@@ -348,6 +348,24 @@ export default function GeneratePage() {
   const isCanvas = viewMode === "canvas";
   const isFullCanvas = isCanvas;
 
+  // 右侧抽屉(对话/资料库)主题令牌 — 与 AIChatPanel 同一视觉语言,
+  // 修复深色模式下「浅色顶栏 + 深色 body」拼接错位(菱角没对齐)的根因
+  const panel = {
+    surface:     isLight ? 'bg-white border-gray-200'             : 'bg-gray-900 border-white/10',
+    headBorder:  isLight ? 'border-gray-200'                      : 'border-white/10',
+    segBg:       isLight ? 'bg-gray-100'                          : 'bg-white/10',
+    segChatOn:   isLight ? 'bg-white text-purple-600 shadow-sm'   : 'bg-white/15 text-purple-300 shadow-sm',
+    segLibOn:    isLight ? 'bg-white text-orange-600 shadow-sm'   : 'bg-white/15 text-orange-300 shadow-sm',
+    segOff:      isLight ? 'text-gray-400 hover:text-gray-600'    : 'text-gray-500 hover:text-gray-200',
+    title:       isLight ? 'text-gray-800'                        : 'text-gray-100',
+    iconBtn:     isLight ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-900' : 'text-gray-400 hover:bg-white/10 hover:text-white',
+    iconBtnMini: isLight ? 'text-gray-400 hover:bg-gray-100 hover:text-gray-700' : 'text-gray-500 hover:bg-white/10 hover:text-gray-200',
+    menu:        isLight ? 'border-gray-200 bg-white'             : 'border-white/10 bg-gray-800',
+    menuItem:    isLight ? 'text-gray-700 hover:bg-gray-50'       : 'text-gray-200 hover:bg-white/5',
+    expandBar:   isLight ? 'border-gray-200 bg-white/95 text-gray-600 hover:bg-white hover:text-gray-900' : 'border-white/10 bg-gray-800/95 text-gray-300 hover:bg-gray-700 hover:text-white',
+    triggerOff:  isLight ? 'border-gray-200 bg-white/90 text-gray-700 hover:bg-white' : 'border-white/10 bg-gray-800/90 text-gray-300 hover:bg-gray-700',
+  };
+
   return (
     <div className="liquid-page min-h-screen">
       {/* 分享弹窗:公开只读快照链接(Phase S) */}
@@ -376,7 +394,10 @@ export default function GeneratePage() {
       <header className={`sticky top-0 z-50 border-b border-white/5 bg-black/20 backdrop-blur-2xl flex items-center justify-between transition-all ${isFullCanvas ? 'px-4 py-2' : 'px-8 py-4'}`}>
         <div className="flex items-center gap-3">
           <ThemeToggle isLight={isLight} toggle={toggleTheme} />
-          <a href="/" className="text-gray-400 hover:text-gray-200 mr-2 text-sm transition-colors">← 返回</a>
+          <a href="/" title="返回首页" className="group inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-sm text-gray-300 transition-all hover:border-white/20 hover:bg-white/10">
+            <svg viewBox="0 0 24 24" className="size-3.5 transition-transform group-hover:-translate-x-0.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
+            返回
+          </a>
           <a href="/video-edit" className="text-xs px-3 py-1 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors border border-purple-500/20">🎬 视频编辑</a>
           {!isFullCanvas && <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-lg object-contain" />}
           {!isFullCanvas && <span className="font-semibold text-lg text-white tracking-tight">视觉 Agent</span>}
@@ -542,8 +563,8 @@ export default function GeneratePage() {
               </div>
             )}
             <div className="absolute right-3 top-3 z-50 flex gap-2">
-              <button data-right-panel-trigger="chat" onClick={() => setRightPanel(rightPanel === 'chat' ? null : 'chat')} title="打开AI对话" className={`rounded-xl border px-3 py-2 text-xs shadow-lg backdrop-blur transition-all ${rightPanel === 'chat' ? 'border-purple-400 bg-purple-500/15 text-purple-300' : 'border-gray-200 bg-white/90 text-gray-700 hover:bg-white'}`}>💬 AI</button>
-              <button data-right-panel-trigger="library" onClick={() => setRightPanel(rightPanel === 'library' ? null : 'library')} title="打开资料库" className={`rounded-xl border px-3 py-2 text-xs shadow-lg backdrop-blur transition-all ${rightPanel === 'library' ? 'border-orange-400 bg-orange-500/15 text-orange-300' : 'border-gray-200 bg-white/90 text-gray-700 hover:bg-white'}`}>🎨 资料库</button>
+              <button data-right-panel-trigger="chat" onClick={() => setRightPanel(rightPanel === 'chat' ? null : 'chat')} title="打开AI对话" className={`rounded-xl border px-3 py-2 text-xs shadow-lg backdrop-blur transition-all ${rightPanel === 'chat' ? 'border-purple-400 bg-purple-500/15 text-purple-300' : panel.triggerOff}`}>💬 AI</button>
+              <button data-right-panel-trigger="library" onClick={() => setRightPanel(rightPanel === 'library' ? null : 'library')} title="打开资料库" className={`rounded-xl border px-3 py-2 text-xs shadow-lg backdrop-blur transition-all ${rightPanel === 'library' ? 'border-orange-400 bg-orange-500/15 text-orange-300' : panel.triggerOff}`}>🎨 资料库</button>
             </div>
             {/* Lovart:收起后的「展开」按钮(右缘竖条,恢复上次面板;与顶栏「收起」对称) */}
             {!rightPanel && (
@@ -551,23 +572,23 @@ export default function GeneratePage() {
                 data-right-panel-expand
                 onClick={() => setRightPanel(lastRightPanel)}
                 title="展开面板"
-                className="absolute right-0 top-1/2 z-40 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-l-xl border border-r-0 border-gray-200 bg-white/95 px-1.5 py-3 text-gray-600 shadow-lg backdrop-blur transition-all hover:bg-white hover:text-gray-900"
+                className={`absolute right-0 top-1/2 z-40 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-l-xl border border-r-0 px-1.5 py-3 shadow-lg backdrop-blur transition-all ${panel.expandBar}`}
               >
                 <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
                 <span className="text-[11px] font-medium" style={{ writingMode: 'vertical-rl' }}>展开</span>
               </button>
             )}
             {rightPanel && (
-              <div data-right-panel-overlay className="absolute right-0 top-0 bottom-0 z-50 w-[399px] bg-white shadow-2xl border-l border-gray-200 flex flex-col">
+              <div data-right-panel-overlay className={`absolute right-0 top-0 bottom-0 z-50 w-[399px] shadow-2xl border-l flex flex-col ${panel.surface}`}>
                 {/* Lovart 顶栏 B:对话面板顶栏 = 模式切换 + 标题 + 新建/分享/收起 */}
-                <div className="relative flex items-center justify-between gap-2 border-b border-gray-200 px-3 py-2">
+                <div className={`relative flex items-center justify-between gap-2 border-b px-3 py-2 ${panel.headBorder}`}>
                   {/* 左:模式切换(💬/🎨 图标段) + 标题 */}
                   <div className="flex min-w-0 items-center gap-2">
-                    <div className="flex items-center rounded-lg bg-gray-100 p-0.5 shrink-0">
-                      <button onClick={() => setRightPanel('chat')} title="AI 对话" className={`grid size-7 place-items-center rounded-md text-sm transition ${rightPanel === 'chat' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>💬</button>
-                      <button onClick={() => setRightPanel('library')} title="资料库" className={`grid size-7 place-items-center rounded-md text-sm transition ${rightPanel === 'library' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>🎨</button>
+                    <div className={`flex items-center rounded-lg p-0.5 shrink-0 ${panel.segBg}`}>
+                      <button onClick={() => setRightPanel('chat')} title="AI 对话" className={`grid size-7 place-items-center rounded-md text-sm transition ${rightPanel === 'chat' ? panel.segChatOn : panel.segOff}`}>💬</button>
+                      <button onClick={() => setRightPanel('library')} title="资料库" className={`grid size-7 place-items-center rounded-md text-sm transition ${rightPanel === 'library' ? panel.segLibOn : panel.segOff}`}>🎨</button>
                     </div>
-                    <span className="truncate text-sm font-semibold text-gray-800" title={rightPanel === 'chat' ? (brief.product_name?.trim() || '新对话') : '资料库'}>
+                    <span className={`truncate text-sm font-semibold ${panel.title}`} title={rightPanel === 'chat' ? (brief.product_name?.trim() || '新对话') : '资料库'}>
                       {rightPanel === 'chat' ? (brief.product_name?.trim() || '新对话') : '资料库'}
                     </span>
                   </div>
@@ -576,15 +597,15 @@ export default function GeneratePage() {
                     {rightPanel === 'chat' && (
                       <>
                         {/* 新建对话 [+] */}
-                        <button onClick={handleNewChat} title="新建对话" className="grid size-8 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900">
+                        <button onClick={handleNewChat} title="新建对话" className={`grid size-8 place-items-center rounded-lg transition-colors ${panel.iconBtn}`}>
                           <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
                         </button>
                         {/* ⌄ 下拉:新建项目对话 / 我的项目(会话历史入口) */}
-                        <button onClick={() => setChatMenuOpen((o) => !o)} title="更多" className="grid size-6 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700">
+                        <button onClick={() => setChatMenuOpen((o) => !o)} title="更多" className={`grid size-6 place-items-center rounded-lg transition-colors ${panel.iconBtnMini}`}>
                           <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
                         </button>
                         {/* 分享对话(生成公开只读快照链接) */}
-                        <button onClick={handleShareChat} disabled={shareBusy} title="分享画布(公开只读链接)" className="grid size-8 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50">
+                        <button onClick={handleShareChat} disabled={shareBusy} title="分享画布(公开只读链接)" className={`grid size-8 place-items-center rounded-lg transition-colors disabled:opacity-50 ${panel.iconBtn}`}>
                           {shareBusy ? (
                             <svg className="size-[18px] animate-spin text-gray-400" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
                           ) : (
@@ -594,7 +615,7 @@ export default function GeneratePage() {
                       </>
                     )}
                     {/* 收起 */}
-                    <button data-right-panel-close onClick={() => setRightPanel(null)} title="收起" className="grid size-8 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900">
+                    <button data-right-panel-close onClick={() => setRightPanel(null)} title="收起" className={`grid size-8 place-items-center rounded-lg transition-colors ${panel.iconBtn}`}>
                       <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                     </button>
                   </div>
@@ -602,11 +623,11 @@ export default function GeneratePage() {
                   {chatMenuOpen && (
                     <>
                       <div className="fixed inset-0 z-[55]" onClick={() => setChatMenuOpen(false)} />
-                      <div className="absolute right-2 top-full z-[60] mt-1 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
-                        <button onClick={() => { setChatMenuOpen(false); navigate('/new'); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50">
+                      <div className={`absolute right-2 top-full z-[60] mt-1 w-44 overflow-hidden rounded-xl border py-1 shadow-xl ${panel.menu}`}>
+                        <button onClick={() => { setChatMenuOpen(false); navigate('/new'); }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${panel.menuItem}`}>
                           <span className="text-sm">➕</span>新建项目对话
                         </button>
-                        <button onClick={() => { setChatMenuOpen(false); navigate('/projects'); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50">
+                        <button onClick={() => { setChatMenuOpen(false); navigate('/projects'); }} className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${panel.menuItem}`}>
                           <span className="text-sm">🗂</span>我的项目
                         </button>
                       </div>
