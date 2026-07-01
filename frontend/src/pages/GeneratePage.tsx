@@ -81,12 +81,19 @@ export default function GeneratePage() {
   // Phase P: 项目切换器 — 全量项目列表(复用 api.projects.list),顶栏下拉切换
   const { data: projects } = useQuery({ queryKey: ['projects', 'list'], queryFn: () => api.projects.list() });
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+  // 图二 级联二级菜单: 悬停任意项目 → 右侧飞出其画布(缺省=当前项目)
+  const [hoverProjectId, setHoverProjectId] = useState<number | null>(null);
   // Phase C Step4: 当前项目的画布列表(二级菜单) + 画布/项目 增删改切
   const queryClient = useQueryClient();
   const { data: canvasList } = useQuery({ queryKey: ['canvases', pid], queryFn: () => api.canvases.list(pid) });
   const canvasesByTimeDesc = [...(canvasList ?? [])].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   const defaultCanvasId = [...(canvasList ?? [])].sort((a, b) => (a.sort_order - b.sort_order) || (a.id - b.id))[0]?.id;
   const effectiveCanvasId = canvasId ?? defaultCanvasId;   // 未指定 ?canvas= 时高亮项目默认画布
+  // 图二 飞出栏数据: flyoutPid===pid 时与上面同 queryKey(react-query 去重), 悬停他项目则懒加载其画布
+  const flyoutPid = hoverProjectId ?? pid;
+  const { data: flyoutCanvasList } = useQuery({ queryKey: ['canvases', flyoutPid], queryFn: () => api.canvases.list(flyoutPid), enabled: projectMenuOpen && flyoutPid != null });
+  const flyoutCanvases = [...(flyoutCanvasList ?? [])].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  const flyoutProjectName = (projects ?? []).find((p) => p.id === flyoutPid)?.name?.trim() || '未命名项目';
   const fmtCanvasTime = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
@@ -94,38 +101,41 @@ export default function GeneratePage() {
     const p2 = (n) => String(n).padStart(2, '0');
     return `${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
   };
-  const switchCanvas = (id) => {
+  // 图二 级联: 处理函数按 projectId 参数化 —— 同项目走 SPA, 跨项目整页跳转(brief 是 project 级, 需重载)
+  const switchCanvas = (projectId, id) => {
     setProjectMenuOpen(false);
+    if (projectId !== pid) { window.location.assign(`/generate/${projectId}?canvas=${id}`); return; }
     if (id === effectiveCanvasId) return;   // 同项目切画布走 SPA(?canvas=), brief 是 project 级不重载
     setSearchParams({ canvas: String(id) });
     setChatKey((k) => k + 1);
   };
-  const createCanvas = async () => {
+  const createCanvas = async (projectId) => {
     try {
-      const c = await api.canvases.create(pid);
-      await queryClient.invalidateQueries({ queryKey: ['canvases', pid] });
+      const c = await api.canvases.create(projectId);
+      await queryClient.invalidateQueries({ queryKey: ['canvases', projectId] });
+      if (projectId !== pid) { window.location.assign(`/generate/${projectId}?canvas=${c.id}`); return; }
       setProjectMenuOpen(false);
       setSearchParams({ canvas: String(c.id) });
       setChatKey((k) => k + 1);
       toast('已新建画布', 'success');
     } catch { toast('新建画布失败', 'error'); }
   };
-  const renameCanvas = async (c) => {
+  const renameCanvas = async (projectId, c) => {
     const name = window.prompt('重命名画布', c.name);
     if (name == null) return;
     const trimmed = name.trim();
     if (!trimmed || trimmed === c.name) return;
     try {
       await api.canvases.rename(c.id, trimmed);
-      await queryClient.invalidateQueries({ queryKey: ['canvases', pid] });
+      await queryClient.invalidateQueries({ queryKey: ['canvases', projectId] });
     } catch { toast('重命名失败', 'error'); }
   };
-  const deleteCanvas = async (c) => {
+  const deleteCanvas = async (projectId, c) => {
     if (!window.confirm(`删除画布「${c.name}」？其画布内容与对话将一并删除，且不可恢复。`)) return;
     try {
       await api.canvases.remove(c.id);
-      await queryClient.invalidateQueries({ queryKey: ['canvases', pid] });
-      if (c.id === effectiveCanvasId) {   // 删的是当前画布 → 切到剩余默认
+      await queryClient.invalidateQueries({ queryKey: ['canvases', projectId] });
+      if (projectId === pid && c.id === effectiveCanvasId) {   // 删的是当前项目的当前画布 → 切到剩余默认
         const remain = (canvasList ?? []).filter((x) => x.id !== c.id);
         setSearchParams(remain[0] ? { canvas: String(remain[0].id) } : {});
         setChatKey((k) => k + 1);
@@ -484,7 +494,7 @@ export default function GeneratePage() {
           {/* Phase P: 项目切换器 — 当前项目名 + 下拉切换(整页跳转以干净重载,避免 briefLoaded ref 残留旧项目) */}
           <div className="relative">
             <button
-              onClick={() => setProjectMenuOpen((o) => !o)}
+              onClick={() => { setHoverProjectId(null); setProjectMenuOpen((o) => !o); }}
               title="切换项目"
               className="inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 text-gray-200 transition-colors hover:bg-white/10"
             >
@@ -495,65 +505,74 @@ export default function GeneratePage() {
             {projectMenuOpen && (
               <>
                 <div className="fixed inset-0 z-[55]" onClick={() => setProjectMenuOpen(false)} />
-                <div className={`absolute left-0 top-full z-[60] mt-1.5 max-h-[70vh] w-64 overflow-auto rounded-xl border py-1.5 shadow-2xl ${panel.menu}`}>
-                  <div className={`px-3 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>切换项目</div>
-                  {(projects ?? []).length === 0 && (
-                    <div className={`px-3 py-2 text-xs ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>暂无其它项目</div>
-                  )}
-                  {(projects ?? []).map((p) => (
-                    p.id === pid ? (
-                      <div key={p.id}>
-                        {/* 当前项目行 + 删除 */}
-                        <div className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${isLight ? 'bg-purple-50 text-purple-700' : 'bg-purple-500/15 text-purple-200'}`}>
-                          <span className="truncate font-medium">{p.name?.trim() || '未命名项目'}</span>
-                          <div className="flex shrink-0 items-center gap-1">
-                            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-                            <button onClick={(e) => deleteProject(p, e)} title="删除项目" className={`rounded p-0.5 ${isLight ? 'text-gray-400 hover:bg-red-50 hover:text-red-500' : 'text-gray-400 hover:bg-red-500/20 hover:text-red-400'}`}>
-                              <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6" /></svg>
-                            </button>
-                          </div>
+                <div className="absolute left-0 top-full z-[60] mt-1.5 flex items-start">
+                  {/* 左栏: 项目列表(悬停任意项目 → 右栏飞出其画布) */}
+                  <div className={`max-h-[70vh] w-64 overflow-auto rounded-xl border py-1.5 shadow-2xl ${panel.menu}`}>
+                    <div className={`px-3 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>切换项目</div>
+                    {(projects ?? []).length === 0 && (
+                      <div className={`px-3 py-2 text-xs ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>暂无项目</div>
+                    )}
+                    {(projects ?? []).map((p) => {
+                      const isActive = p.id === pid;
+                      const isFlyout = p.id === flyoutPid;
+                      return (
+                        <div key={p.id} onMouseEnter={() => setHoverProjectId(p.id)} className={`flex items-center gap-1 ${isFlyout ? (isLight ? 'bg-gray-100' : 'bg-white/10') : ''}`}>
+                          {isActive ? (
+                            <div className={`flex min-w-0 flex-1 items-center gap-2 px-3 py-2 text-sm ${isLight ? 'text-purple-700' : 'text-purple-200'}`}>
+                              <svg viewBox="0 0 24 24" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                              <span className="truncate font-medium">{p.name?.trim() || '未命名项目'}</span>
+                            </div>
+                          ) : (
+                            <a href={`/generate/${p.id}`} className={`flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-sm ${panel.menuItem}`}>
+                              <span className="truncate">{p.name?.trim() || '未命名项目'}</span>
+                              {p.generation_count > 0 && <span className={`shrink-0 text-[11px] ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>{p.generation_count} 次</span>}
+                            </a>
+                          )}
+                          <svg viewBox="0 0 24 24" className={`size-3.5 shrink-0 ${isFlyout ? (isLight ? 'text-purple-400' : 'text-purple-300') : (isLight ? 'text-gray-300' : 'text-gray-500')}`} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 6 6 6-6 6" /></svg>
+                          <button onClick={(e) => deleteProject(p, e)} title="删除项目" className={`mr-1 shrink-0 rounded p-1 ${isLight ? 'text-gray-300 hover:bg-red-50 hover:text-red-500' : 'text-gray-500 hover:bg-red-500/20 hover:text-red-400'}`}>
+                            <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6" /></svg>
+                          </button>
                         </div>
-                        {/* 二级菜单: 本项目的画布(时间降序) */}
-                        <div className={`px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>画布</div>
-                        {canvasesByTimeDesc.map((c) => (
-                          <div key={c.id} className={`flex items-center justify-between gap-1 rounded-md py-1.5 pl-6 pr-2 text-sm ${c.id === effectiveCanvasId ? (isLight ? 'bg-purple-50 text-purple-700' : 'bg-purple-500/15 text-purple-200') : panel.menuItem}`}>
-                            <button onClick={() => switchCanvas(c.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                              {c.id === effectiveCanvasId
+                      );
+                    })}
+                    <div className={`my-1 border-t ${panel.headBorder}`} />
+                    <a href="/new" className={`flex items-center gap-2 px-3 py-2 text-sm ${panel.menuItem}`}><span className="text-base leading-none">＋</span>新建项目</a>
+                    <a href="/projects" className={`flex items-center gap-2 px-3 py-2 text-sm ${panel.menuItem}`}><span className="text-base leading-none">🗂</span>全部项目</a>
+                  </div>
+                  {/* 右栏: 悬停项目的画布(级联飞出二级菜单) */}
+                  {(projects ?? []).length > 0 && (
+                    <div className={`ml-1.5 max-h-[70vh] w-60 overflow-auto rounded-xl border py-1.5 shadow-2xl ${panel.menu}`}>
+                      <div className={`truncate px-3 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wider ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>画布 · {flyoutProjectName}</div>
+                      {flyoutCanvases.length === 0 && (
+                        <div className={`px-3 py-2 text-xs ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>加载中…</div>
+                      )}
+                      {flyoutCanvases.map((c) => {
+                        const isCurrent = flyoutPid === pid && c.id === effectiveCanvasId;
+                        return (
+                          <div key={c.id} className={`flex items-center justify-between gap-1 rounded-md py-1.5 pl-3 pr-2 text-sm ${isCurrent ? (isLight ? 'bg-purple-50 text-purple-700' : 'bg-purple-500/15 text-purple-200') : panel.menuItem}`}>
+                            <button onClick={() => switchCanvas(flyoutPid, c.id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                              {isCurrent
                                 ? <svg viewBox="0 0 24 24" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
                                 : <span className="size-3.5 shrink-0" />}
                               <span className="truncate">{c.name}</span>
                               <span className={`shrink-0 text-[10px] ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>{fmtCanvasTime(c.created_at)}</span>
                             </button>
                             <div className="flex shrink-0 items-center gap-0.5">
-                              <button onClick={() => renameCanvas(c)} title="重命名画布" className={`rounded p-0.5 ${isLight ? 'text-gray-400 hover:bg-gray-200 hover:text-gray-700' : 'text-gray-400 hover:bg-white/10 hover:text-gray-100'}`}>
+                              <button onClick={() => renameCanvas(flyoutPid, c)} title="重命名画布" className={`rounded p-0.5 ${isLight ? 'text-gray-400 hover:bg-gray-200 hover:text-gray-700' : 'text-gray-400 hover:bg-white/10 hover:text-gray-100'}`}>
                                 <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
                               </button>
-                              <button onClick={() => deleteCanvas(c)} title="删除画布" className={`rounded p-0.5 ${isLight ? 'text-gray-400 hover:bg-red-50 hover:text-red-500' : 'text-gray-400 hover:bg-red-500/20 hover:text-red-400'}`}>
+                              <button onClick={() => deleteCanvas(flyoutPid, c)} title="删除画布" className={`rounded p-0.5 ${isLight ? 'text-gray-400 hover:bg-red-50 hover:text-red-500' : 'text-gray-400 hover:bg-red-500/20 hover:text-red-400'}`}>
                                 <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6" /></svg>
                               </button>
                             </div>
                           </div>
-                        ))}
-                        <button onClick={createCanvas} className={`flex w-full items-center gap-2 rounded-md py-1.5 pl-6 pr-3 text-sm ${panel.menuItem}`}>
-                          <span className="text-base leading-none">＋</span>新建画布
-                        </button>
-                        <div className={`my-1 border-t ${panel.headBorder}`} />
-                      </div>
-                    ) : (
-                      <div key={p.id} className="flex items-center gap-1">
-                        <a href={`/generate/${p.id}`} className={`flex min-w-0 flex-1 items-center justify-between gap-2 px-3 py-2 text-sm ${panel.menuItem}`}>
-                          <span className="truncate">{p.name?.trim() || '未命名项目'}</span>
-                          {p.generation_count > 0 && <span className={`shrink-0 text-[11px] ${isLight ? 'text-gray-400' : 'text-gray-500'}`}>{p.generation_count} 次</span>}
-                        </a>
-                        <button onClick={(e) => deleteProject(p, e)} title="删除项目" className={`mr-1 shrink-0 rounded p-1 ${isLight ? 'text-gray-300 hover:bg-red-50 hover:text-red-500' : 'text-gray-500 hover:bg-red-500/20 hover:text-red-400'}`}>
-                          <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6" /></svg>
-                        </button>
-                      </div>
-                    )
-                  ))}
-                  <div className={`my-1 border-t ${panel.headBorder}`} />
-                  <a href="/new" className={`flex items-center gap-2 px-3 py-2 text-sm ${panel.menuItem}`}><span className="text-base leading-none">＋</span>新建项目</a>
-                  <a href="/projects" className={`flex items-center gap-2 px-3 py-2 text-sm ${panel.menuItem}`}><span className="text-base leading-none">🗂</span>全部项目</a>
+                        );
+                      })}
+                      <button onClick={() => createCanvas(flyoutPid)} className={`flex w-full items-center gap-2 rounded-md py-1.5 pl-3 pr-3 text-sm ${panel.menuItem}`}>
+                        <span className="text-base leading-none">＋</span>新建画布
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}
