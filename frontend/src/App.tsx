@@ -17,6 +17,7 @@ import BrandLibraryPage from './pages/BrandLibraryPage';
 import ProfilePage from './pages/ProfilePage';
 import CopywritingPage from './pages/CopywritingPage';
 import NewProjectPage from './pages/NewProjectPage';
+import SharedCanvasPage from './pages/SharedCanvasPage';
 import Layout from './components/Layout';
 import { RequireAuth } from './components/RequireAuth';
 import { lazy, Suspense } from 'react';
@@ -28,6 +29,7 @@ export default function App() {
     <Route path='/' element={<RequireAuth><ProjectsPage /></RequireAuth>} />
     <Route path='/generate/:projectId' element={<RequireAuth><GeneratePage /></RequireAuth>} />
     <Route path='/auth' element={<AuthPage />} />
+    <Route path='/share/:token' element={<SharedCanvasPage />} />
     <Route path='/dashboard' element={<RequireAuth><DashboardPage /></RequireAuth>} />
     <Route path='/history' element={<RequireAuth><HistoryPage /></RequireAuth>} />
     <Route path='/video-edit' element={<RequireAuth><VideoEditPage /></RequireAuth>} />

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, generateAll, exportMarkdown, saveBrief, getProjectBrief } from '../api/client';
 import type { ProductBrief, VisualAssetPlan } from '../types';
@@ -19,6 +19,7 @@ import AgentProgress from '../components/AgentProgress';
 import ThemeToggle, { useTheme } from '../components/ThemeToggle';
 import ModelPreferencePanel from '../components/model/ModelPreferencePanel';
 import { formatElapsedSeconds } from '../lib/elapsed';
+import { toast } from '../components/Toast';
 
 
 const DF: ProductBrief = { product_name:'', category:'', specifications:[], selling_points:[], target_market:[], usage_scenarios:[], brand_style: "" };
@@ -70,6 +71,16 @@ export default function GeneratePage() {
   const [autoModel, setAutoModel] = useState(true);
   const [selectedImageModel, setSelectedImageModel] = useState<string | null>(null);
   const { data: modelOptions } = useQuery({ queryKey: ['generation', 'models', 'catalog'], queryFn: () => api.generation.catalog() });
+  // Lovart 顶栏 A/B 所需
+  const navigate = useNavigate();
+  const { data: creditsData } = useQuery({ queryKey: ['credits', 'balance'], queryFn: () => api.credits.balance() });
+  const credits = creditsData?.credits ?? null;
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);   // 「新建对话」旁的 ⌄ 下拉
+  const [chatKey, setChatKey] = useState(0);                 // 递增以 remount AIChatPanel = 重置对话
+  const [lastRightPanel, setLastRightPanel] = useState<'chat' | 'library'>('chat'); // 收起前记住,展开时恢复
+  useEffect(() => { if (rightPanel) setLastRightPanel(rightPanel); }, [rightPanel]);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);   // 分享弹窗:生成的公开只读链接
+  const [shareBusy, setShareBusy] = useState(false);
 
   const addCanvasAssetToChat = (asset: ChatAssetContext) => {
     setChatAssetContext(asset);
@@ -82,6 +93,35 @@ export default function GeneratePage() {
     setPanelOpen(true);
     setQuickMode(false);
     setViewMode('canvas');
+  };
+
+  // Lovart 顶栏 B:新建对话 = 清空本项目对话历史 + remount 面板(画布内容不受影响)
+  const handleNewChat = async () => {
+    setChatMenuOpen(false);
+    if (!window.confirm('新建对话会清空当前对话记录（画布内容不受影响），确定继续吗？')) return;
+    try { await api.chat.saveHistory(pid, []); } catch { /* 清空失败不阻断,remount 后仍是新面板 */ }
+    setChatAssetContext(null);
+    setGenTaskId(null);
+    setIsGenerating(false);
+    setChatKey((k) => k + 1);
+    toast('已开启新对话', 'success');
+  };
+
+  // Lovart 顶栏 B:分享 = 生成真·公开只读快照链接(Phase S 后端)+ 弹窗展示/复制
+  const handleShareChat = async () => {
+    setChatMenuOpen(false);
+    setShareBusy(true);
+    try {
+      const { token } = await api.share.create(pid, brief.product_name?.trim() || undefined);
+      const url = `${window.location.origin}/share/${token}`;
+      setShareUrl(url);
+      try { await navigator.clipboard.writeText(url); toast('公开只读链接已生成并复制', 'success'); }
+      catch { toast('链接已生成（自动复制失败，请手动复制）', 'info'); }
+    } catch (e: any) {
+      toast(e?.response?.data?.detail || '生成分享链接失败', 'error');
+    } finally {
+      setShareBusy(false);
+    }
   };
 
     useEffect(() => {
@@ -310,6 +350,28 @@ export default function GeneratePage() {
 
   return (
     <div className="liquid-page min-h-screen">
+      {/* 分享弹窗:公开只读快照链接(Phase S) */}
+      {shareUrl && (
+        <div className="fixed inset-0 z-[80] grid place-items-center bg-black/50 p-4" onClick={() => setShareUrl(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-gray-900">分享画布</h3>
+              <button onClick={() => setShareUrl(null)} className="rounded-lg px-2 py-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700">✕</button>
+            </div>
+            <p className="mt-1.5 text-xs leading-relaxed text-gray-500">已生成<b className="text-gray-700">公开只读</b>快照链接，任何人（含同公司同事）可通过此链接查看当前画布。快照是分享时刻的冻结拷贝，之后再编辑不影响已分享内容。</p>
+            <div className="mt-3 flex items-center gap-2">
+              <input readOnly value={shareUrl} onFocus={(e) => e.currentTarget.select()} className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700" />
+              <button
+                onClick={async () => { try { await navigator.clipboard.writeText(shareUrl); toast('已复制', 'success'); } catch { toast('复制失败', 'error'); } }}
+                className="shrink-0 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-gray-700"
+              >复制</button>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <a href={shareUrl} target="_blank" rel="noreferrer" className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-50">在新标签预览</a>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Glass header — compact when canvas */}
       <header className={`sticky top-0 z-50 border-b border-white/5 bg-black/20 backdrop-blur-2xl flex items-center justify-between transition-all ${isFullCanvas ? 'px-4 py-2' : 'px-8 py-4'}`}>
         <div className="flex items-center gap-3">
@@ -333,6 +395,22 @@ export default function GeneratePage() {
               🎨 风格参考已加载
             </span>
           )}
+          {/* Lovart 顶栏 A:积分 + 头像(画布工作区隐藏了全局导航,这里补上) */}
+          <button
+            onClick={() => navigate('/profile')}
+            title="积分余额 · 点击充值"
+            className="hidden sm:inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" className="size-4 text-orange-400" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" /></svg>
+            <span className="text-sm font-semibold tabular-nums">{credits === null ? '—' : credits.toLocaleString()}</span>
+          </button>
+          <button
+            onClick={() => navigate('/profile')}
+            title="个人中心"
+            className="grid place-items-center size-8 rounded-full bg-gradient-to-br from-orange-500 to-rose-500 text-white shrink-0 hover:scale-105 transition-transform"
+          >
+            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>
+          </button>
         </div>
       </header>
 
@@ -467,18 +545,78 @@ export default function GeneratePage() {
               <button data-right-panel-trigger="chat" onClick={() => setRightPanel(rightPanel === 'chat' ? null : 'chat')} title="打开AI对话" className={`rounded-xl border px-3 py-2 text-xs shadow-lg backdrop-blur transition-all ${rightPanel === 'chat' ? 'border-purple-400 bg-purple-500/15 text-purple-300' : 'border-gray-200 bg-white/90 text-gray-700 hover:bg-white'}`}>💬 AI</button>
               <button data-right-panel-trigger="library" onClick={() => setRightPanel(rightPanel === 'library' ? null : 'library')} title="打开资料库" className={`rounded-xl border px-3 py-2 text-xs shadow-lg backdrop-blur transition-all ${rightPanel === 'library' ? 'border-orange-400 bg-orange-500/15 text-orange-300' : 'border-gray-200 bg-white/90 text-gray-700 hover:bg-white'}`}>🎨 资料库</button>
             </div>
+            {/* Lovart:收起后的「展开」按钮(右缘竖条,恢复上次面板;与顶栏「收起」对称) */}
+            {!rightPanel && (
+              <button
+                data-right-panel-expand
+                onClick={() => setRightPanel(lastRightPanel)}
+                title="展开面板"
+                className="absolute right-0 top-1/2 z-40 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-l-xl border border-r-0 border-gray-200 bg-white/95 px-1.5 py-3 text-gray-600 shadow-lg backdrop-blur transition-all hover:bg-white hover:text-gray-900"
+              >
+                <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 18l-6-6 6-6" /></svg>
+                <span className="text-[11px] font-medium" style={{ writingMode: 'vertical-rl' }}>展开</span>
+              </button>
+            )}
             {rightPanel && (
               <div data-right-panel-overlay className="absolute right-0 top-0 bottom-0 z-50 w-[399px] bg-white shadow-2xl border-l border-gray-200 flex flex-col">
-                <div className="flex items-center justify-between border-b border-gray-200 px-4 py-2">
-                  <div className="flex gap-2">
-                    <button onClick={() => setRightPanel('chat')} className={`rounded-lg px-3 py-1.5 text-xs ${rightPanel === 'chat' ? 'bg-purple-50 text-purple-600' : 'text-gray-500 hover:bg-gray-50'}`}>💬 AI对话</button>
-                    <button onClick={() => setRightPanel('library')} className={`rounded-lg px-3 py-1.5 text-xs ${rightPanel === 'library' ? 'bg-orange-50 text-orange-600' : 'text-gray-500 hover:bg-gray-50'}`}>🎨 资料库</button>
+                {/* Lovart 顶栏 B:对话面板顶栏 = 模式切换 + 标题 + 新建/分享/收起 */}
+                <div className="relative flex items-center justify-between gap-2 border-b border-gray-200 px-3 py-2">
+                  {/* 左:模式切换(💬/🎨 图标段) + 标题 */}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="flex items-center rounded-lg bg-gray-100 p-0.5 shrink-0">
+                      <button onClick={() => setRightPanel('chat')} title="AI 对话" className={`grid size-7 place-items-center rounded-md text-sm transition ${rightPanel === 'chat' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>💬</button>
+                      <button onClick={() => setRightPanel('library')} title="资料库" className={`grid size-7 place-items-center rounded-md text-sm transition ${rightPanel === 'library' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>🎨</button>
+                    </div>
+                    <span className="truncate text-sm font-semibold text-gray-800" title={rightPanel === 'chat' ? (brief.product_name?.trim() || '新对话') : '资料库'}>
+                      {rightPanel === 'chat' ? (brief.product_name?.trim() || '新对话') : '资料库'}
+                    </span>
                   </div>
-                  <button data-right-panel-close onClick={() => setRightPanel(null)} title="关闭右侧面板" className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-500 hover:text-gray-900">✕</button>
+                  {/* 右:操作簇 */}
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    {rightPanel === 'chat' && (
+                      <>
+                        {/* 新建对话 [+] */}
+                        <button onClick={handleNewChat} title="新建对话" className="grid size-8 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900">
+                          <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+                        </button>
+                        {/* ⌄ 下拉:新建项目对话 / 我的项目(会话历史入口) */}
+                        <button onClick={() => setChatMenuOpen((o) => !o)} title="更多" className="grid size-6 place-items-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700">
+                          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+                        </button>
+                        {/* 分享对话(生成公开只读快照链接) */}
+                        <button onClick={handleShareChat} disabled={shareBusy} title="分享画布(公开只读链接)" className="grid size-8 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50">
+                          {shareBusy ? (
+                            <svg className="size-[18px] animate-spin text-gray-400" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4" /></svg>
+                          )}
+                        </button>
+                      </>
+                    )}
+                    {/* 收起 */}
+                    <button data-right-panel-close onClick={() => setRightPanel(null)} title="收起" className="grid size-8 place-items-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900">
+                      <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                    </button>
+                  </div>
+                  {/* ⌄ 下拉菜单 + 点击外部关闭 */}
+                  {chatMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[55]" onClick={() => setChatMenuOpen(false)} />
+                      <div className="absolute right-2 top-full z-[60] mt-1 w-44 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
+                        <button onClick={() => { setChatMenuOpen(false); navigate('/new'); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50">
+                          <span className="text-sm">➕</span>新建项目对话
+                        </button>
+                        <button onClick={() => { setChatMenuOpen(false); navigate('/projects'); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50">
+                          <span className="text-sm">🗂</span>我的项目
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
                 {rightPanel === 'chat' && (
                   <div className="flex-1 overflow-hidden">
                     <AIChatPanel
+                      key={chatKey}
                       taskId={genTaskId}
                       isLight={isLight}
                       projectName={brief.product_name || '未命名'}

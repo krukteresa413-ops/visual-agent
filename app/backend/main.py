@@ -15,6 +15,7 @@ from app.models.font_generation_model import FontGeneration
 from app.models.video_task import VideoTask
 from app.models.auth import Tenant, User  # ensure users table mapped before create_all
 from app.models.credit import CreditOrder  # 图四 充值订单
+from app.models.share_link import ShareLink  # Phase S 真·分享(免登录只读快照)
 from app.api.visual_tasks import router as visual_tasks_router
 from app.api.brief_routes import router as brief_router
 from app.api.project_routes import router as project_router
@@ -51,6 +52,7 @@ from app.api.library_routes import router as library_router
 from app.api.chat_routes import router as chat_router
 from app.api.payment_routes import router as payment_router
 from app.api.credits_routes import router as credits_router
+from app.api.share_routes import router as share_router
 
 
 Base.metadata.create_all(bind=engine)
@@ -106,6 +108,7 @@ app.include_router(canvas_action_router)
 app.include_router(canvas_image_action_router)
 app.include_router(payment_router)
 app.include_router(credits_router)
+app.include_router(share_router)
 
 
 @app.get("/health")

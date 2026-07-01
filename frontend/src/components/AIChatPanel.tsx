@@ -769,14 +769,14 @@ export default function AIChatPanel({ taskId, isLight, onComplete, onClose, onPr
           </div>
         </div>
       )}
-      {/* ── Header: project name + action icons ── */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
-        <div className="flex items-center gap-3">
-          {onClose && (
+      {/* ── Header: 仅当父级传入 onClose 时渲染关闭键;GeneratePage 走外层 Lovart 顶栏,不传 onClose → 此处不渲染,避免顶部空白 ── */}
+      {onClose && (
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+          <div className="flex items-center gap-3">
             <button onClick={onClose} className={`${toolIconColor} transition-colors text-sm`}>✕</button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       <span data-chat-lifecycle-phase={lifecyclePhase} className="sr-only">{lifecyclePhase}</span>
 

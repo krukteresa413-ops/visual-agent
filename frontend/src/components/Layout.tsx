@@ -40,7 +40,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const isActive = (path: string) =>
     pathname === path || (path !== '/' && pathname.startsWith(path));
-  const isCanvasWorkspace = pathname.startsWith('/generate/') || pathname.startsWith('/excali/');
+  const isCanvasWorkspace = pathname.startsWith('/generate/') || pathname.startsWith('/excali/') || pathname.startsWith('/share/');
 
   const handleNewProject = () => {
     // 新建项目 → Brief 页(图四),解析后跳进无限画布
