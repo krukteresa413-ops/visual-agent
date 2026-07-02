@@ -21,7 +21,7 @@ from app.models.canvas import Canvas
 from app.models.project import Project
 from app.models.share_link import ShareLink
 from app.services.auth_service import get_current_user
-from app.services.canvas_service import assert_generation_access, get_canvas_state_for
+from app.services.canvas_service import assert_generation_access, get_canvas_state_for, tenant_access_denied
 
 logger = logging.getLogger(__name__)
 
@@ -130,11 +130,7 @@ def revoke_share(
     link = db.query(ShareLink).filter(ShareLink.token == token).first()
     if not link:
         raise HTTPException(status_code=404, detail="share not found")
-    if (
-        link.tenant_id is not None
-        and current_user.tenant_id is not None
-        and link.tenant_id != current_user.tenant_id
-    ):
+    if tenant_access_denied(link.tenant_id, getattr(current_user, "tenant_id", None)):  # O3: 统一走 flag 守卫
         raise HTTPException(status_code=403, detail="forbidden")
     link.revoked = True
     db.commit()

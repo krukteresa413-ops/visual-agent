@@ -7,6 +7,7 @@ ChatConversation，并自愈迁移窗口内老代码可能创建的 canvas_id=NU
   canvas_id=NULL 的遗留行(设上 canvas_id),避免后续按 project_id 唯一约束冲突;仍无且 create=True 才新建。
 - 单画布行为不变: 前端不传 canvas_id → 回退默认画布(每项目恰 1 张,已回填) → 命中同一行。
 """
+import os
 from typing import Optional, Tuple
 
 from fastapi import HTTPException
@@ -111,11 +112,27 @@ def get_chat_conversation_for(
     return canvas, conv
 
 
-# ── 租户守卫(Phase C Step 2) ──────────────────────────────────────────
-# 供 canvas CRUD / canvas-state / chat 等端点复用。宽松式: 仅当资源与用户的
-# tenant_id 都非空且不等才拒绝(兼容 legacy tenant_id=NULL 的老数据, 对齐 share_routes/
-# project_routes 的做法); platform_admin 一律放行。user 走鸭子类型, 只取 .role/.tenant_id,
-# 不 import User 以免耦合 auth 模型。
+# ── 租户守卫(Phase C Step 2；O3 加 STRICT_TENANT_GUARD flag) ────────────
+# 供 canvas CRUD / canvas-state / chat / 生成端点复用。platform_admin 一律放行；
+# user 走鸭子类型只取 .role/.tenant_id，不 import User 以免耦合 auth 模型。
+# 两档(由 env STRICT_TENANT_GUARD 切换，默认宽松，可秒级回退)：
+#   宽松(默认): 仅当资源与 user 的 tenant_id 都非空且不等才拒(兼容 legacy tenant_id=NULL)。
+#   严格(O3): 资源或 user 的 tenant_id 为空, 或两者不等 → 拒。生产数据已零 NULL, 严格为纵深加固。
+
+
+def strict_tenant_guard_enabled() -> bool:
+    """O3: env STRICT_TENANT_GUARD 开关(默认关)。每次调用读一次, 便于灰度/秒级回退(改 env + 重启生效)。"""
+    return os.getenv("STRICT_TENANT_GUARD", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
+def tenant_access_denied(resource_tenant_id, user_tenant_id) -> bool:
+    """是否应因租户不匹配而拒绝(调用方另行放行 platform_admin)。见上方两档说明。
+    单一判定点: canvas_service 三守卫 + share_routes.revoke 复用, 保证开关一处生效、语义一致。"""
+    if strict_tenant_guard_enabled():
+        return (resource_tenant_id is None or user_tenant_id is None
+                or resource_tenant_id != user_tenant_id)
+    return (resource_tenant_id is not None and user_tenant_id is not None
+            and resource_tenant_id != user_tenant_id)
 
 
 def assert_project_access(db: Session, project_id: int, user) -> "object":
@@ -127,11 +144,7 @@ def assert_project_access(db: Session, project_id: int, user) -> "object":
         raise HTTPException(status_code=404, detail="project not found")
     if getattr(user, "role", None) == "platform_admin":
         return project
-    if (
-        project.tenant_id is not None
-        and getattr(user, "tenant_id", None) is not None
-        and project.tenant_id != user.tenant_id
-    ):
+    if tenant_access_denied(project.tenant_id, getattr(user, "tenant_id", None)):
         raise HTTPException(status_code=403, detail="forbidden")
     return project
 
@@ -150,11 +163,7 @@ def assert_canvas_access(db: Session, canvas_id: int, user) -> Canvas:
 
         proj = db.query(Project).filter(Project.id == canvas.project_id).first()
         tenant_id = proj.tenant_id if proj is not None else None
-    if (
-        tenant_id is not None
-        and getattr(user, "tenant_id", None) is not None
-        and tenant_id != user.tenant_id
-    ):
+    if tenant_access_denied(tenant_id, getattr(user, "tenant_id", None)):
         raise HTTPException(status_code=403, detail="forbidden")
     return canvas
 

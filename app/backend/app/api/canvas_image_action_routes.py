@@ -13,6 +13,7 @@ from app.models.canvas_state import CanvasState
 from app.services.auth_service import get_current_user
 from app.services.canvas_image_action_service import canvas_image_action_service
 from app.services.canvas_service import assert_generation_access
+from app.services.tenant_resolver import resolve_tenant_id
 
 router = APIRouter(prefix="/api/v1/canvas", tags=["canvas-image-actions"])
 
@@ -115,7 +116,7 @@ async def run_canvas_image_action(req: CanvasImageActionRequest, current_user: U
             instruction=req.instruction.strip(),
             provider=req.provider,
             model=req.model,
-            tenant_id=current_user.tenant_id,  # O1: 抠图产物按租户/项目分区落盘
+            tenant_id=resolve_tenant_id(req.project_id, db=db),  # O3: 与图片生成一致从 Project 派生(platform_admin 跨租户也归属项目所有者)
             project_id=req.project_id,
         )
     except (FileNotFoundError, ValueError) as exc:
