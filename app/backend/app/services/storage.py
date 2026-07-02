@@ -205,7 +205,14 @@ class OSSBackend(StorageBackend):
             # 首选：ECS 实例 RAM 角色，自动取临时凭据，AK/SK 不落地（方案 §3.3）
             from oss2.credentials import EcsRamRoleCredentialsProvider
             role = os.getenv("OSS_RAM_ROLE")
-            provider = EcsRamRoleCredentialsProvider(role) if role else EcsRamRoleCredentialsProvider()
+            meta_base = os.getenv(
+                "OSS_ECS_META_BASE",
+                "http://100.100.100.200/latest/meta-data/ram/security-credentials/")
+            if not role:  # 未显式给角色则从实例元数据自动发现绑定的角色名
+                import urllib.request
+                role = urllib.request.urlopen(meta_base, timeout=5).read().decode().strip()
+            # oss2 2.19.x: Provider 第一参=完整元数据URL(auth_host) 非角色名; 内部按 Expiration 自动续期
+            provider = EcsRamRoleCredentialsProvider(meta_base + role)
             auth = (oss2.ProviderAuthV4(provider) if hasattr(oss2, "ProviderAuthV4")
                     else oss2.ProviderAuth(provider))
 
