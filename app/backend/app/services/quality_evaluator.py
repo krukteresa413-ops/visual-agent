@@ -63,11 +63,6 @@ async def evaluate_assets(
     Returns:
         QualityReport with scores and suggestions
     """
-    from app.services.llm_client import LLMClient
-
-    if llm_client is None:
-        llm_client = LLMClient()
-
     # Build evaluation context
     product_name = brief.get("product_name", "未知产品")
     category = brief.get("category", "")
@@ -94,12 +89,22 @@ async def evaluate_assets(
 请对该方案进行三维评分："""
 
     try:
-        raw = await llm_client.call(
-            system_prompt=EVALUATION_SYSTEM_PROMPT,
-            user_prompt=eval_context,
-            temperature=0.3,  # Low temp for consistency
-            max_tokens=1024,  # Minimal tokens — evaluation only
-        )
+        # 优先走 DataEyes(唯一可用文字通道);测试可注入 llm_client 覆盖
+        if llm_client is not None:
+            raw = await llm_client.call(
+                system_prompt=EVALUATION_SYSTEM_PROMPT,
+                user_prompt=eval_context,
+                temperature=0.3,
+                max_tokens=1024,
+            )
+        else:
+            from app.services.dataeyes_text import dataeyes_json
+            raw = await dataeyes_json(
+                EVALUATION_SYSTEM_PROMPT, eval_context,
+                temperature=0.3, max_tokens=1024,
+            )
+        if not isinstance(raw, dict) or not raw.get("dimensions"):
+            raise ValueError("评估返回为空")
 
         # Parse dimensions
         dims = []
@@ -116,7 +121,8 @@ async def evaluate_assets(
             dimensions=dims,
             overall_score=int(raw.get("overall_score", sum(d.score for d in dims) // len(dims) if dims else 5)),
             summary=raw.get("summary", "评估完成"),
-            model_used=getattr(getattr(llm_client, '_provider', None), '_model', 'unknown'),
+            model_used=(getattr(getattr(llm_client, '_provider', None), '_model', 'unknown')
+                        if llm_client is not None else "dataeyes:gpt-4o"),
         )
 
     except Exception as e:

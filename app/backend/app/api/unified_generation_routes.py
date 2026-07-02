@@ -1178,8 +1178,8 @@ async def generate_orchestrate(req: OrchestrateRequest, current_user: User = Dep
     task_id = str(uuid.uuid4())
     _async_gen_tasks[task_id] = {"status": "processing"}
     # 同步创建进度任务,避免前端订阅 SSE 时任务尚未建立(竞态 → 404 → 进度卡死)。
-    # total_steps≈每 Agent running+done 两事件 × 10。
-    progress = GenerationTracker.get().create(task_id, total_steps=20)
+    # total_steps≈每 Agent running+done 两事件 × 10 + 质量评审。
+    progress = GenerationTracker.get().create(task_id, total_steps=22)
 
     async def _run_orchestration():
         try:
@@ -1192,10 +1192,20 @@ async def generate_orchestrate(req: OrchestrateRequest, current_user: User = Dep
 
             result = await run_pipeline(
                 brief, req.project_id, progress_callback=on_progress,
-                agents=build_default_agents(), timeout_seconds=45.0,
+                agents=build_default_agents(), timeout_seconds=75.0,
             )
             gen_result = build_generation_result(brief, result.get("results", {}))
             elapsed = int(time.time() - start)
+
+            # 质量评审(critic):复用 quality_evaluator,走 DataEyes 打分
+            quality_report = None
+            try:
+                await progress.step("质量评审", "evaluating", "正在评估构图/色彩/商业适用性...")
+                from app.services.quality_evaluator import evaluate_assets, report_to_dict
+                qr = await evaluate_assets(brief=brief, generation_result=gen_result)
+                quality_report = report_to_dict(qr)
+            except Exception as _qe:  # noqa: BLE001 — 评审失败不影响主产出
+                quality_report = {"error": str(_qe)[:200]}
 
             try:
                 from app.db.session import SessionLocal
@@ -1217,6 +1227,7 @@ async def generate_orchestrate(req: OrchestrateRequest, current_user: User = Dep
                 "parsed_brief": brief,
                 "generation": gen_result,
                 "agents": result.get("agents", []),
+                "quality_check": quality_report,
                 "elapsed_seconds": elapsed,
             }
         except Exception as e:
