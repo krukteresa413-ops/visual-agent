@@ -581,14 +581,7 @@ export default function GeneratePage() {
           {!isFullCanvas && <span className="font-semibold text-lg text-white tracking-tight">视觉 Agent</span>}
         </div>
         <div className="flex items-center gap-3">
-          {result && <span className="text-xs text-gray-400">耗时 {formatElapsedSeconds(startTime, Date.now())}</span>}
-          {result && <button onClick={copy} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-gray-300 transition-all">{copied?'已复制':'复制 Markdown'}</button>}
-          {result && (
-            <button onClick={() => setViewMode(m => m === 'canvas' ? 'tabs' : 'canvas')}
-              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs text-gray-300 transition-all">
-              {viewMode === 'canvas' ? '📋 标签视图' : '🎨 画布视图'}
-            </button>
-          )}
+          {/* 顶栏「耗时 / 复制 Markdown / 标签视图」按钮按需移除(编辑页无用);viewMode 默认 canvas 保持画布视图 */}
           {promptTemplate && (
             <span className="text-xs text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20 max-w-[200px] truncate" title={promptTemplate}>
               🎨 风格参考已加载
