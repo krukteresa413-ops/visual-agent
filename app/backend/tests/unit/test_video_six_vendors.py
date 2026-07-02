@@ -14,7 +14,7 @@ from app.services.video_generation_service import (
 
 @pytest.fixture(autouse=True)
 def mock_video_download(monkeypatch):
-    async def fake_download(_url, task_id):
+    async def fake_download(_url, task_id, **_kw):  # O1: 接受 tenant_id/project_id kwargs
         return f"/uploads/generated/{task_id}.mp4"
     monkeypatch.setattr("app.services.video_generation_service._download_video_to_local", fake_download)
 

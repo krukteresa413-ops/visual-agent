@@ -115,6 +115,8 @@ async def run_canvas_image_action(req: CanvasImageActionRequest, current_user: U
             instruction=req.instruction.strip(),
             provider=req.provider,
             model=req.model,
+            tenant_id=current_user.tenant_id,  # O1: 抠图产物按租户/项目分区落盘
+            project_id=req.project_id,
         )
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -79,13 +79,12 @@ async def upload_logo(brand_id: int, file: UploadFile = File(...), db: Session =
     p = db.query(BrandProfile).filter(BrandProfile.id == brand_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Not found")
-    upload_dir = "/opt/visual-agent/uploads"
-    os.makedirs(upload_dir, exist_ok=True)
     ext = file.filename.split(".")[-1] if "." in (file.filename or "") else "png"
-    filename = f"logo_{uuid.uuid4().hex[:8]}.{ext}"
-    with open(os.path.join(upload_dir, filename), "wb") as f:
-        f.write(await file.read())
-    p.logo_url = f"/uploads/{filename}"
+    from app.services.storage import get_storage
+    p.logo_url = await get_storage().save_bytes(
+        await file.read(), tenant_id=p.tenant_id, category="logo", ext=ext,
+        project_id=p.project_id, content_type=file.content_type,
+    )  # O1: logo 按品牌所属租户/项目分区
     db.commit()
     return {"logo_url": p.logo_url}
 

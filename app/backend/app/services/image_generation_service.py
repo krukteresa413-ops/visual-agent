@@ -20,6 +20,8 @@ from app.models.image_generation_model import (
     ImageGenerationRequest,
     ImageGenerationResult,
 )
+from app.services.storage import get_storage
+from app.services.tenant_resolver import resolve_tenant_id
 
 # ---------------------------------------------------------------------------
 # Provider descriptor
@@ -135,18 +137,21 @@ class LocalPlaceholderProvider(ImageGenerationProvider):
         badge = f"{w}x{h} • local placeholder"
         draw.text((20, h - 30), badge, fill=(148, 163, 184), font=font)
 
-        # Save
-        prompt_hash = hashlib.md5(request.prompt.encode()).hexdigest()[:12]
-        filename = f"gen_{prompt_hash}_{w}x{h}.png"
-        filepath = os.path.join(UPLOAD_DIR, filename)
-        img.save(filepath, "PNG")
+        # Save via storage 抽象层(O1)：local→/uploads/...；oss→OSS。tenant/project 来自 request。
+        url = await get_storage().save_pil(
+            img,
+            tenant_id=request.tenant_id,
+            project_id=request.project_id,
+            category=(request.category or "generated"),
+            fmt="PNG",
+        )
 
         return ImageGenerationResult(
             provider="local",
             status="succeeded",
             images=[
                 GeneratedImage(
-                    url=f"/uploads/generated/{filename}",
+                    url=url,
                     width=w,
                     height=h,
                 )
@@ -665,17 +670,20 @@ class DataEyesAIImageProvider(ImageGenerationProvider):
                 detail=f"DataEyesAI NanoBanana returned no image in response: {content[:200]}",
             )
 
-        os.makedirs(UPLOAD_DIR, exist_ok=True)
-        filename = f"dataeyes_nb_{uuid.uuid4().hex[:12]}_{request.width}x{request.height}.png"
-        filepath = os.path.join(UPLOAD_DIR, filename)
-        with open(filepath, "wb") as image_file:
-            image_file.write(_b64.b64decode(b64))
+        url = await get_storage().save_bytes(
+            _b64.b64decode(b64),
+            tenant_id=request.tenant_id,
+            project_id=request.project_id,
+            category=(request.category or "generated"),
+            ext="png",
+            content_type="image/png",
+        )
 
         return ImageGenerationResult(
             provider="dataeyes",
             status="succeeded",
             images=[GeneratedImage(
-                url=f"/uploads/generated/{filename}",
+                url=url,
                 width=request.width,
                 height=request.height,
                 provider_asset_id=str(data.get("id", "")),
@@ -776,12 +784,14 @@ class DataEyesAIImageProvider(ImageGenerationProvider):
                 ))
                 continue
             if b64:
-                os.makedirs(UPLOAD_DIR, exist_ok=True)
-                filename = f"dataeyes_{uuid.uuid4().hex[:12]}_{request.width}x{request.height}.png"
-                filepath = os.path.join(UPLOAD_DIR, filename)
-                with open(filepath, "wb") as image_file:
-                    image_file.write(base64.b64decode(b64))
-                url = f"/uploads/generated/{filename}"
+                url = await get_storage().save_bytes(
+                    base64.b64decode(b64),
+                    tenant_id=request.tenant_id,
+                    project_id=request.project_id,
+                    category=(request.category or "generated"),
+                    ext="png",
+                    content_type="image/png",
+                )
             images.append(GeneratedImage(
                 url=url,
                 width=request.width,
@@ -842,6 +852,10 @@ class ImageGenerationService:
                 detail=f"Unknown image generation provider: {request.provider}. "
                 f"Available: {list(self._providers.keys())}",
             )
+        # O1: 集中从 project_id 派生 tenant_id(未显式给定时)，供 provider 落盘做 OSS 多租户分区。
+        # 一处收敛，覆盖全部构造点(quick/canvas/asset/agent…)，避免把可推导的 tenant 穿过每一层。
+        if request.project_id is not None and request.tenant_id is None:
+            request.tenant_id = resolve_tenant_id(request.project_id)
         return await provider.generate(request)
 
 

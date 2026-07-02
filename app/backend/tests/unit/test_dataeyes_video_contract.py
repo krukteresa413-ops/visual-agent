@@ -51,7 +51,7 @@ async def test_dataeyes_video_provider_maps_seedance_request(monkeypatch):
         async def get(self, path):
             return PollResp()
 
-    async def fake_download(_url, _task_id):
+    async def fake_download(_url, _task_id, **_kw):  # O1: 接受 tenant_id/project_id kwargs
         return "/uploads/generated/seedance.mp4"
 
     async def no_sleep(_seconds):

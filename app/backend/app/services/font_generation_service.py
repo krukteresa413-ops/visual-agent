@@ -64,6 +64,8 @@ class FontGenerationService:
                     provider=request.provider,
                     width=request.width,
                     height=request.height,
+                    tenant_id=request.tenant_id,
+                    project_id=request.project_id,
                 )
                 
                 # Update record with result
@@ -97,6 +99,8 @@ class FontGenerationService:
         provider: str,
         width: int,
         height: int,
+        tenant_id: Optional[int] = None,
+        project_id: Optional[int] = None,
     ) -> dict:
         """Generate font image using specified provider."""
         start_time = datetime.now()
@@ -109,6 +113,9 @@ class FontGenerationService:
                 prompt=prompt,
                 width=width,
                 height=height,
+                category="font",  # O1: 字体图落 font/ 分区
+                tenant_id=tenant_id,
+                project_id=project_id,
             )
             
             result = await image_generation_service.generate(img_request)

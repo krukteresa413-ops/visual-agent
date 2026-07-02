@@ -25,12 +25,10 @@ async def upload_image(file: UploadFile = File(...)):
     content = await file.read()
     if len(content) > MAX_SIZE:
         raise HTTPException(status_code=400, detail='文件超过10MB')
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    ext = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
-    filename = f'{uuid.uuid4().hex[:12]}.{ext}'
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    with open(filepath, 'wb') as f: f.write(content)
-    return {'filename': filename, 'url': f'/uploads/{filename}', 'size_bytes': len(content), 'content_type': file.content_type}
+    ext = file.filename.split('.')[-1] if (file.filename and '.' in file.filename) else 'jpg'
+    from app.services.storage import get_storage
+    url = await get_storage().save_bytes(content, tenant_id=None, category='upload', ext=ext, content_type=file.content_type)  # O1: 匿名上传→shared/upload
+    return {'filename': url.rsplit('/', 1)[-1], 'url': url, 'size_bytes': len(content), 'content_type': file.content_type}
 
 @router.delete('/image/{filename}')
 async def delete_image(filename: str):
@@ -50,12 +48,10 @@ async def upload_video(file: UploadFile = File(...)):
     content = await file.read()
     if len(content) > MAX_VIDEO:
         raise HTTPException(status_code=400, detail='视频超过50MB')
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    ext = file.filename.split('.')[-1] if '.' in file.filename else 'mp4'
-    filename = f'{uuid.uuid4().hex[:12]}.{ext}'
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    with open(filepath, 'wb') as f: f.write(content)
-    return {'filename': filename, 'url': f'/uploads/{filename}', 'size_bytes': len(content), 'content_type': file.content_type}
+    ext = file.filename.split('.')[-1] if (file.filename and '.' in file.filename) else 'mp4'
+    from app.services.storage import get_storage
+    url = await get_storage().save_bytes(content, tenant_id=None, category='upload', ext=ext, content_type=file.content_type)  # O1: 匿名上传→shared/upload
+    return {'filename': url.rsplit('/', 1)[-1], 'url': url, 'size_bytes': len(content), 'content_type': file.content_type}
 
 ALLOWED_DOC = {'application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation','application/msword','application/vnd.ms-excel','application/vnd.ms-powerpoint','text/plain','text/csv'}
 MAX_DOC = 20*1024*1024

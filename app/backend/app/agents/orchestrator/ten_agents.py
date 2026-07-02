@@ -263,7 +263,8 @@ async def agent_image(ctx: PipelineContext) -> dict:
         for prov in _IMAGE_CHAIN:
             try:
                 r = await image_generation_service.generate(ImageGenerationRequest(
-                    provider=prov, model=None, prompt=prompt, width=1024, height=1024))
+                    provider=prov, model=None, prompt=prompt, width=1024, height=1024,
+                    project_id=ctx.project_id))  # O1: 落盘按项目分区
                 img = r.images[0] if getattr(r, "images", None) else None
                 if img and img.url:
                     return {"url": img.url, "provider": getattr(r, "provider", prov),
@@ -336,7 +337,7 @@ async def agent_mockup(ctx: PipelineContext) -> dict:
     req = MockupAgent().build_request(mtype, b.get("product_name", "产品"), img.get("url"))
     url = None
     try:
-        r = await image_generation_service.generate(ImageGenerationRequest(provider="dataeyes", model=None, prompt=req["prompt"], width=1024, height=1024))
+        r = await image_generation_service.generate(ImageGenerationRequest(provider="dataeyes", model=None, prompt=req["prompt"], width=1024, height=1024, project_id=ctx.project_id))  # O1: 落盘按项目分区
         mi = r.images[0] if getattr(r, "images", None) else None
         url = mi.url if mi else None
     except Exception:  # noqa: BLE001 — mockup 渲染失败不致命,保留 request

@@ -55,6 +55,10 @@ class FontGenerationRequest(BaseModel):
     width: int = Field(default=1024, ge=64, le=2048)
     height: int = Field(default=1024, ge=64, le=2048)
 
+    # OSS 多租户分区(Phase O1)：可选携带；字体路由目前无 auth/project → 通常 None → shared/font。
+    project_id: Optional[int] = None
+    tenant_id: Optional[int] = None
+
 
 class FontGenerationResponse(BaseModel):
     """Response after submitting font generation task."""

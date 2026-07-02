@@ -275,6 +275,7 @@ class VisualAgent:
         from app.services.image_generation_service import image_generation_service
 
         result = {"main_image": None, "white_bg": None, "scene_images": []}
+        pid = getattr(plan, "project_id", None)  # O1: 落盘按项目分区(tenant 由 service 派生)
 
         if plan.main_image and getattr(plan.main_image, "prompt", None):
             try:
@@ -284,6 +285,7 @@ class VisualAgent:
                     width=width,
                     height=height,
                     model=model,
+                    project_id=pid,
                 )
                 gen = await image_generation_service.generate(req)
                 if gen.images:
@@ -301,6 +303,7 @@ class VisualAgent:
                     width=width,
                     height=height,
                     model=model,
+                    project_id=pid,
                 )
                 gen = await image_generation_service.generate(req)
                 if gen.images:
@@ -320,6 +323,7 @@ class VisualAgent:
                     width=width,
                     height=height,
                     model=model,
+                    project_id=pid,
                 )
                 gen = await image_generation_service.generate(req)
                 if gen.images:

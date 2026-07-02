@@ -398,15 +398,11 @@ class MigeVideoProvider(VideoGenerationProvider):
 
 
 
-async def _download_video_to_local(url: str, task_id: str) -> str:
-    """Download a vendor video URL immediately because vendor URLs expire."""
-    import os as _os
-    import uuid as _uuid
+async def _download_video_to_local(url: str, task_id: str, *, tenant_id=None, project_id=None) -> str:
+    """Download a vendor video URL immediately because vendor URLs expire.
+    O1: 落盘走 storage 抽象层(local→/uploads/...；oss→OSS)，按 tenant/project 分区。"""
     import httpx as _httpx
-    upload_dir = "/opt/visual-agent/uploads/generated"
-    _os.makedirs(upload_dir, exist_ok=True)
-    filename = f"video_{task_id or _uuid.uuid4().hex[:12]}.mp4".replace("/", "_")
-    path = _os.path.join(upload_dir, filename)
+    from app.services.storage import get_storage
     async with _httpx.AsyncClient(timeout=300.0, trust_env=False, headers={
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
         "Accept": "video/mp4,video/*,*/*",
@@ -414,9 +410,10 @@ async def _download_video_to_local(url: str, task_id: str) -> str:
         resp = await client.get(url)
         if resp.status_code >= 400:
             raise HTTPException(status_code=502, detail=f"Video download error ({resp.status_code}): {resp.text[:200]}")
-        with open(path, "wb") as f:
-            f.write(resp.content)
-    return f"/uploads/generated/{filename}"
+        return await get_storage().save_bytes(
+            resp.content, tenant_id=tenant_id, project_id=project_id,
+            category="generated", ext="mp4", content_type="video/mp4",
+        )
 
 class DataEyesAIVideoProvider(VideoGenerationProvider):
     """DataEyesAI video generation — per-vendor adapters for six platforms.
@@ -661,6 +658,10 @@ class DataEyesAIVideoProvider(VideoGenerationProvider):
         model = request.model or "doubao-seedance-1-5-pro-251215"
         duration = request.duration
         opts = request.options or {}
+        # O1: 视频落盘按项目分区；tenant 由 project 派生(集中一处，覆盖下面两个 download 调用点)。
+        from app.services.tenant_resolver import resolve_tenant_id
+        _pid = opts.get("project_id") or getattr(request, "project_id", None)
+        _tid = resolve_tenant_id(_pid)
         platform_name = opts.get("platform") or self._platform_for_model(model)
         vendor = self.VENDORS.get(platform_name)
         if not vendor:
@@ -746,7 +747,7 @@ class DataEyesAIVideoProvider(VideoGenerationProvider):
                                     dl_data = dl_resp.json()
                                     video_url = vendor["parse_video_url"](dl_data) or dl_data.get("download_url", "")
                                     if video_url:
-                                        local_url = await _download_video_to_local(video_url, task_id)
+                                        local_url = await _download_video_to_local(video_url, task_id, tenant_id=_tid, project_id=_pid)
                                         return VideoGenerationResult(
                                             provider="dataeyes", status="succeeded",
                                             videos=[GeneratedVideo(url=local_url, duration=duration, provider_asset_id=task_id)]
@@ -765,7 +766,7 @@ class DataEyesAIVideoProvider(VideoGenerationProvider):
                 video_url = vendor["parse_video_url"](poll_data)
                 if not video_url:
                     raise HTTPException(status_code=502, detail=f"DataEyesAI/{platform_name}: {status} but no video URL")
-                local_url = await _download_video_to_local(video_url, task_id)
+                local_url = await _download_video_to_local(video_url, task_id, tenant_id=_tid, project_id=_pid)
                 # Update DB on success
                 try:
                     from app.db.session import SessionLocal

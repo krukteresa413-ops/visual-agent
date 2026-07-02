@@ -117,6 +117,7 @@ async def generate_canvas_variant_asset(req: CanvasActionRequest, source: Canvas
                 width=1024,
                 height=1024,
                 options=image_options,
+                project_id=req.project_id,  # O1: 落盘按项目分区(tenant 由 service 派生)
             ))
             if r.status == "succeeded" and r.images:
                 image_result = r

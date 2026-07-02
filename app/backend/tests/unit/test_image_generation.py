@@ -162,6 +162,16 @@ class TestImageGenerationRoutes:
 
 
 class TestDataEyesAIProvider:
+    @pytest.fixture(autouse=True)
+    def _redirect_storage_to_tmp(self, tmp_path):
+        """O1: 落盘改走 get_storage()。直接把单例设为指向 tmp 的 LocalBackend，避免污染生产
+        uploads(注意 storage.LOCAL_ROOT 在 import 时求值，改 UPLOADS_ROOT env 已无效)。用后清单例。"""
+        from app.services import storage as _storage
+        _storage._backend = _storage.LocalBackend(root=str(tmp_path))
+        self._uploads_root = tmp_path
+        yield
+        _storage.reset_storage()
+
     @patch("app.services.image_generation_service.UPLOAD_DIR", "/tmp/moyag-test-generated")
     @patch("httpx.AsyncClient.post")
     async def test_dataeyes_b64_response_is_saved_as_static_url(self, mock_post):
@@ -182,9 +192,9 @@ class TestDataEyesAIProvider:
         result = await provider.generate(ImageGenerationRequest(provider="dataeyes", prompt="red shoe", model="gpt-image-2"))
 
         assert result.provider == "dataeyes"
-        assert result.images[0].url.startswith("/uploads/generated/")
+        assert result.images[0].url.startswith("/uploads/")  # O1: /uploads/{scope}/generated/...
         assert not result.images[0].url.startswith("data:")
-        saved = Path("/tmp/moyag-test-generated") / Path(result.images[0].url).name
+        saved = self._uploads_root / result.images[0].url[len("/uploads/"):]
         assert saved.exists()
 
     @patch("app.services.image_generation_service.UPLOAD_DIR", "/tmp/moyag-test-generated")

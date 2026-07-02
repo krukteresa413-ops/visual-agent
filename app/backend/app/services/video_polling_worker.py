@@ -24,12 +24,9 @@ POLL_INTERVAL = 10  # seconds between polls
 MAX_POLLS = 120      # max polls per task (20 minutes)
 
 
-async def _download_video(url: str, task_id: str) -> str | None:
-    """Download video to local storage. Returns local path or None."""
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    import uuid
-    filename = f"video_{uuid.uuid4().hex[:12]}.mp4"
-    filepath = os.path.join(UPLOAD_DIR, filename)
+async def _download_video(url: str, task_id: str, *, tenant_id=None, project_id=None) -> str | None:
+    """Download video and persist via storage 抽象层(O1). Returns URL or None."""
+    from app.services.storage import get_storage
     try:
         async with httpx.AsyncClient(timeout=300, headers={
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -37,10 +34,10 @@ async def _download_video(url: str, task_id: str) -> str | None:
             }) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
-                with open(filepath, "wb") as f:
-                    f.write(resp.content)
-                local_url = f"/uploads/generated/{filename}"
-                return local_url
+                return await get_storage().save_bytes(
+                    resp.content, tenant_id=tenant_id, project_id=project_id,
+                    category="generated", ext="mp4", content_type="video/mp4",
+                )
     except Exception:
         pass
     return None
@@ -103,8 +100,10 @@ async def poll_single_task(task: VideoTask, db: Session) -> bool:
                 db.commit()
                 return True
 
-            # Download video
-            local_url = await _download_video(video_url, task.provider_task_id)
+            # Download video (O1: 落盘按项目分区；tenant 从 Project 派生，孤儿任务→None→shared/)
+            from app.services.tenant_resolver import resolve_tenant_id
+            _tid = resolve_tenant_id(task.project_id, db=db)
+            local_url = await _download_video(video_url, task.provider_task_id, tenant_id=_tid, project_id=task.project_id)
             task.video_url = video_url
             task.local_path = local_url
             task.status = "succeeded"

@@ -60,7 +60,7 @@ class TestGeminiChatCompletionsFormat:
 
             assert result.status == "succeeded"
             assert len(result.images) == 1
-            assert result.images[0].url.startswith("/uploads/generated/")
+            assert result.images[0].url.startswith("/uploads/")  # O1: storage 分区路径 /uploads/{scope}/generated/...
             # Verify chat completions was called, not images/generations
             call_args = mock_client.return_value.post.call_args
             assert "/chat/completions" in str(call_args)

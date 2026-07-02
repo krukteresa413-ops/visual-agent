@@ -127,6 +127,7 @@ async def _generate_image_version(req: ModifyRequest) -> dict:
         prompt=prompt,
         width=1024,
         height=1024,
+        project_id=req.project_id,  # O1: 落盘按项目分区(tenant 由 service 派生)
     ))
     image = result.images[0] if result.images else None
     if not image or not image.url:

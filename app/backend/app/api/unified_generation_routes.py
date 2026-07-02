@@ -433,6 +433,7 @@ async def _quick_generate_image_asset(req, brief: dict) -> dict:
                 width=1024,
                 height=1024,
                 reference_image_url=reference_image_url,
+                project_id=req.project_id,  # O1: 落盘按项目分区
             ))
             image = image_result.images[0] if (image_result and image_result.images) else None
             if image is not None and image.url:

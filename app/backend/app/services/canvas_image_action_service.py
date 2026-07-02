@@ -21,15 +21,15 @@ class CanvasImageActionService:
     replacement images.
     """
 
-    async def run(self, action: str, image_url: str, instruction: str = "", provider: str = "rembg", model: str | None = None) -> dict:
+    async def run(self, action: str, image_url: str, instruction: str = "", provider: str = "rembg", model: str | None = None, *, tenant_id: int | None = None, project_id: int | None = None) -> dict:
         if action == "cutout":
-            return await self._run_cutout(image_url)
+            return await self._run_cutout(image_url, tenant_id=tenant_id, project_id=project_id)
         raise ValueError(f"unsupported canvas image action: {action}")
 
-    async def _run_cutout(self, image_url: str) -> dict:
+    async def _run_cutout(self, image_url: str, *, tenant_id: int | None = None, project_id: int | None = None) -> dict:
         source_bytes = await self._read_source_image(image_url)
         subject = self._remove_background(source_bytes)
-        subject_url, width, height = self._save_png(subject, "canvas-cutout")
+        subject_url, width, height = self._save_png(subject, tenant_id=tenant_id, project_id=project_id)
         return {
             "url": subject_url,
             "width": width,
@@ -42,13 +42,14 @@ class CanvasImageActionService:
         output_bytes = remove(source_bytes)
         return Image.open(BytesIO(output_bytes)).convert("RGBA")
 
-    def _save_png(self, image: Image.Image, prefix: str) -> tuple[str, int, int]:
-        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-        filename = f"{prefix}{uuid4().hex}.png" if prefix.endswith("-") else f"{prefix}-{uuid4().hex}.png"
-        output_path = GENERATED_DIR / filename
+    def _save_png(self, image: Image.Image, *, tenant_id: int | None = None, project_id: int | None = None) -> tuple[str, int, int]:
+        # O1: 落盘走 storage 抽象层(sync helper，被 async _run_cutout 调)。
+        from app.services.storage import get_storage
         image = image.convert("RGBA")
-        image.save(output_path, format="PNG")
-        return f"/uploads/generated/{filename}", image.width, image.height
+        url = get_storage().save_pil_sync(
+            image, tenant_id=tenant_id, project_id=project_id, category="generated", fmt="PNG",
+        )
+        return url, image.width, image.height
 
     async def _read_source_image(self, image_url: str) -> bytes:
         if image_url.startswith("/uploads/"):
