@@ -297,7 +297,22 @@ def _selected_video_model(req) -> tuple[str, dict]:
     requested = getattr(req, "image_model", None)
     if requested in VIDEO_MODEL_OPTIONS:
         return requested, dict(VIDEO_MODEL_OPTIONS[requested])
-    return "doubao-seedance-1-5-pro-251215", dict(VIDEO_MODEL_OPTIONS["doubao-seedance-1-5-pro-251215"])
+    # 默认用 DataEyes 当前可用的 kling-v2-6。seedance(doubao-*)在 DataEyes 已无可用渠道
+    # (submit 503 no available groups),不能再作默认,否则视频永远提交失败。
+    return "kling-v2-6", dict(VIDEO_MODEL_OPTIONS["kling-v2-6"])
+
+
+def _public_media_url(url: str | None) -> str | None:
+    """把相对 /uploads 路径转成外部厂商可抓取的绝对 URL(i2v 首帧必须外网可达:
+    kling/vidu 在自己服务器拉图,相对路径拉不到 → i2v 失败)。已是 http(s)/data 原样返回。"""
+    if not url:
+        return url
+    if url.startswith("http://") or url.startswith("https://") or url.startswith("data:"):
+        return url
+    if url.startswith("/uploads") or url.startswith("uploads/"):
+        base = os.getenv("PUBLIC_BASE_URL", "https://moyaops.xyz").rstrip("/")
+        return base + "/" + url.lstrip("/")
+    return url
 
 
 async def _quick_generate_video_asset(req, brief: dict) -> dict:
@@ -319,22 +334,27 @@ async def _quick_generate_video_asset(req, brief: dict) -> dict:
 
     # 用户选定的 (platform, model) 优先;其余作为“提交失败”时的快速回退。
     # 提交是秒级的,真正出片由后台 video_polling_worker 轮询(异步出片)。
+    # 可用性优先的回退链:kling 已验证可用;seedance 当前 DataEyes 无渠道(503 no available
+    # groups),放最后仅作 DataEyes 恢复后候选。真正出片由后台 video_polling_worker 轮询。
     _fallback = [
-        ("seedance", "doubao-seedance-1-5-pro-251215"),
         ("kling", "kling-v2-6"),
         ("vidu", "viduq3-pro"),
         ("hailuo", "MiniMax-Hailuo-2.3"),
+        ("seedance", "doubao-seedance-1-5-pro-251215"),
     ]
-    video_chain = [(sel_platform, model)] + [(p, m) for (p, m) in _fallback if p != sel_platform]
+    video_chain = [(sel_platform, model)] + [(p, m) for (p, m) in _fallback if (p, m) != (sel_platform, model)]
+    ref_frame = _public_media_url(getattr(req, "reference_image_url", None))
     last_err = None
     for platform, vmodel in video_chain:
-        options = dict(base_options)
+        # 每家厂商用各自模型选项(不再沿用首选模型的);未知模型回退 base_options。
+        options = dict(VIDEO_MODEL_OPTIONS.get(vmodel) or base_options)
         options["platform"] = platform
+        options.setdefault("resolution", resolution)
         options["submit_only"] = True
         options["project_id"] = getattr(req, "project_id", None)
         options["canvas_id"] = getattr(req, "canvas_id", None)   # Phase C Step3b: 视频落回发起画布
-        if getattr(req, "reference_image_url", None):
-            options["first_frame_url"] = req.reference_image_url
+        if ref_frame:
+            options["first_frame_url"] = ref_frame   # i2v 首帧(已转外网可达绝对 URL)
         try:
             result = await video_generation_service.generate(VideoGenerationRequest(
                 provider="dataeyes",
@@ -351,12 +371,15 @@ async def _quick_generate_video_asset(req, brief: dict) -> dict:
                     "status": "submitted",
                     "message": "视频已提交，排队生成中",
                 }
-        except Exception as e:  # noqa: BLE001 — 换下一家厂商
+        except Exception as e:  # noqa: BLE001 — 换下一家厂商;记日志(别再静默吞掉:这是之前 bug 隐身的元凶)
             last_err = e
+            logger.warning("video submit failed on %s/%s: %s", platform, vmodel, str(e)[:200])
             continue
+    logger.error("video submit failed on ALL vendors; last error: %s", str(last_err)[:300])
     return {
         "video": {"url": "", "duration": duration, "error": str(last_err) if last_err else "视频厂商均不可用"},
         "modality": "video",
+        "status": "error",
         "_note": "所有视频厂商暂不可用,请稍后重试。",
     }
 
