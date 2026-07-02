@@ -6,9 +6,11 @@ const barSource = fs.readFileSync(path.resolve(__dirname, 'ImageActionBar.tsx'),
 const flowSource = fs.readFileSync(path.resolve(__dirname, '../CanvasFlow.tsx'), 'utf8');
 
 describe('ImageActionBar React Flow contract', () => {
-  it('renders the five-action bar with busy-based disabling', () => {
+  it('renders the eight-action bar with busy-based disabling', () => {
     expect(barSource).toContain('data-lovart-image-action-bar');
-    expect((barSource.match(/id: '/g) || []).length).toBe(5);
+    // download / to-chat / cutout / back / backward / forward / front / delete
+    expect((barSource.match(/id: '/g) || []).length).toBe(8);
+    expect(barSource).toContain("id: 'to-chat'");
     expect(barSource).toContain('data-image-action={action.id}');
     expect(barSource).toContain('busy === action.id');
   });

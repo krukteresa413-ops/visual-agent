@@ -1,8 +1,10 @@
 type Action = { id: string; label: string; hint?: string };
 
-// 下载 / 抠图 | 图层顺序(置底/下移/上移/置顶) | 删除。图层四操作另配快捷键(hint 显在 tooltip)。
+// 下载 / 加到对话框 / 抠图 | 图层顺序(置底/下移/上移/置顶) | 删除。图层四操作另配快捷键(hint 显在 tooltip)。
+// 「加到对话框」把该图/视频作为参考塞进右侧对话(以图生图 / 以图生视频),图片与视频都保留。
 const ACTIONS: Action[] = [
   { id: 'download', label: '下载' },
+  { id: 'to-chat', label: '加到对话框', hint: '加到对话框(以图生图/生视频)' },
   { id: 'cutout', label: '抠图' },
   { id: 'back', label: '置底', hint: '置底 (Ctrl+Shift+[)' },
   { id: 'backward', label: '下移', hint: '下移一层 (Ctrl+[)' },

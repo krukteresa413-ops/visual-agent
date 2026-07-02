@@ -699,6 +699,20 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
       if (url) window.open(url, '_blank');
       return;
     }
+    if (id === 'to-chat') {
+      // 把选中图/视频作为参考塞进右侧对话(以图生图 / 以图生视频),复用父级 onAddToChat。
+      if (!url) return;
+      const d = (node.data || {}) as { legacy_id?: string; label?: string; type?: string; metadata?: Record<string, unknown> };
+      const nodeType = String(d.type || '');
+      props.onAddToChat?.({
+        id: String(d.legacy_id || node.id),
+        label: String(d.label || (nodeType === 'video' ? '画布视频' : '画布图片')),
+        image_url: url,
+        type: nodeType || 'image',
+        metadata: d.metadata || { source: 'canvas-action-bar' },
+      });
+      return;
+    }
     if (id === 'delete') {
       const remaining = getNodes().filter((n) => n.id !== node.id) as typeof nodes;
       setSelectedActionNode(null);
@@ -738,7 +752,7 @@ void saveCanvas({ nodes, edges, viewport: viewport || getViewport() });
         setImgActionBusy(null);
       }
     }
-  }, [selectedActionNode, getNodes, setNodes, setSelectedActionNode, commit, projectId, nodes, applyLayerOp]);
+  }, [selectedActionNode, getNodes, setNodes, setSelectedActionNode, commit, projectId, nodes, applyLayerOp, props.onAddToChat]);
 
   // 图二 / Phase A:画布底部工具栏 — 选择/上传图已接;AI图/AI视频改为画布内「生成节点」(GeneratorNode)
   const [toolMode, setToolMode] = useState<string>('select');
